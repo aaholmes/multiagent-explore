@@ -146,10 +146,12 @@ SimulationManager creates the environment grid from a predefined map file.
 It spawns two RobotNode instances at their starting positions.
 Initial RobotPhase for both is INITIAL_WALL_FIND.
 Initial scout_depth_n is set to a small value (e.g., 3).
+
 Phase 1: Initial Wall Find
 
 Both robots move together in a pre-determined direction (e.g., +X).
 Upon one robot detecting an OBSTACLE, it stops and communicates this to its partner. They both transition to BOUNDARY_SCOUTING.
+
 Phase 2: Iterative Boundary Scouting
 
 The robots agree on "opposite" directions (e.g., Robot 1 keeps the wall to its left, Robot 2 to its right).
@@ -159,6 +161,7 @@ They execute the path, updating their maps with local sensor data. During this, 
 If they detect each other within sensor range during this path execution, a loop is complete. They transition to BOUNDARY_ANALYSIS.
 If the path is completed without meeting, each robot plans a "return scan" path: n steps along the adjacent row of cells, back towards the start of their scouting leg.
 They reconvene, share maps, and n is doubled for the next iteration.
+
 Phase 3: Loop Analysis & Island Handling
 
 Once a loop is closed, the robots merge their maps and analyze the completed loop path.
@@ -169,11 +172,13 @@ Robots identify their original travel direction before starting the loop trace.
 They plan a path in that direction away from the island and revert to INITIAL_WALL_FIND or BOUNDARY_SCOUTING upon hitting the next wall.
 If Outer Wall:
 The boundary is considered mapped. They transition to CENTRAL_SCAN.
+
 Phase 4: Central Island Scan
 
 The robots identify a central line/path through the newly mapped area.
 They move together along this path to the other side, mapping any large central obstacles they find.
 Upon completion, they transition to INTERIOR_SWEEP.
+
 Phase 5: Coordinated Interior Sweeps
 
 The robots identify the current complete frontier between the explored interior and unexplored interior.
