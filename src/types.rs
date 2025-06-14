@@ -33,6 +33,7 @@ pub struct Pose {
 }
 
 /// The shared map representation.
+#[derive(Clone)]
 pub struct GridMap {
     pub width: usize,
     pub height: usize,
@@ -41,6 +42,7 @@ pub struct GridMap {
 }
 
 /// State information for a single robot.
+#[derive(Clone)]
 pub struct RobotState {
     pub id: u8,
     pub pose: Pose,
@@ -54,6 +56,7 @@ pub struct RobotState {
 }
 
 /// Data collected during a boundary trace to analyze a closed loop.
+#[derive(Clone)]
 pub struct LoopAnalysisData {
     pub path_traced: Vec<Point>,
     pub total_angular_displacement: f64,

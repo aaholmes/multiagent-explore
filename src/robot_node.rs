@@ -38,7 +38,7 @@ impl RobotNode {
     }
 
     /// Merges a map received from a partner robot into this robot's own map.
-    pub fn merge_map(&mut self, partner_map: &GridMap) {
+    pub fn merge_map(&mut self, _partner_map: &GridMap) {
         // TODO: Implement
     }
 } 
