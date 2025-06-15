@@ -19,11 +19,21 @@ struct VisualizeApp {
     map_height: usize,
     tick: usize,
     playing: bool,
+    frame_counter: usize,
+    frames_per_tick: usize,
 }
 
 impl VisualizeApp {
     pub fn new(history: Vec<Vec<RobotNode>>, map_width: usize, map_height: usize) -> Self {
-        Self { history, map_width, map_height, tick: 0, playing: true }
+        Self {
+            history,
+            map_width,
+            map_height,
+            tick: 0,
+            playing: false, // User must hit Play
+            frame_counter: 0,
+            frames_per_tick: 10, // Slower animation (higher = slower)
+        }
     }
 }
 
@@ -39,10 +49,16 @@ impl App for VisualizeApp {
             });
             ui.add_space(20.0);
 
-            // Auto-play logic
+            // Auto-play logic (slowed down)
             if self.playing && self.tick < self.history.len().saturating_sub(1) {
-                self.tick += 1;
+                self.frame_counter += 1;
+                if self.frame_counter >= self.frames_per_tick {
+                    self.tick += 1;
+                    self.frame_counter = 0;
+                }
                 ctx.request_repaint();
+            } else {
+                self.frame_counter = 0;
             }
 
             // Calculate map display size
