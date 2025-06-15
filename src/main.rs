@@ -3,16 +3,21 @@ use std::env;
 
 /// Main entry point for the multi-robot exploration simulation.
 fn main() {
-    // Parse map file path from command line arguments
+    // Parse map file path and optional seed from command line arguments
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: {} <map_file>", args[0]);
+        eprintln!("Usage: {} <map_file> [seed]", args[0]);
         std::process::exit(1);
     }
     let map_file = &args[1];
+    let seed: u64 = if args.len() > 2 {
+        args[2].parse().unwrap_or(42)
+    } else {
+        42
+    };
 
     // Load map and initialize simulation
-    let mut sim = match SimulationManager::from_map_file(map_file) {
+    let mut sim = match SimulationManager::from_map_file(map_file, seed) {
         Ok(sim) => sim,
         Err(e) => {
             eprintln!("Failed to load map: {}", e);
@@ -31,6 +36,7 @@ fn main() {
                 robot.state.phase
             );
         }
+        sim.print_all_maps();
         sim.tick();
     }
     println!("Simulation complete.");
