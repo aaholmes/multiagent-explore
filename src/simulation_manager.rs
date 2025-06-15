@@ -54,6 +54,7 @@ impl SimulationManager {
                 last_known_partner_pose: None,
                 loop_analysis_data: None,
                 travel_direction_before_island: None,
+                boundary_scout: None,
             },
             RobotState {
                 id: 1,
@@ -69,6 +70,7 @@ impl SimulationManager {
                 last_known_partner_pose: None,
                 loop_analysis_data: None,
                 travel_direction_before_island: None,
+                boundary_scout: None,
             },
         ];
         // After setting positions, update each robot's local map with initial surroundings

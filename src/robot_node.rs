@@ -10,9 +10,10 @@ pub struct RobotNode {
 impl RobotNode {
     /// The main decision-making loop, called on each simulation tick.
     /// Only performs movement; sensing and communication are handled externally.
-    pub fn tick(&mut self, _all_robots: &[RobotNode], _global_map: &GridMap) {
+    pub fn tick(&mut self, all_robots: &[RobotNode], global_map: &GridMap) {
         match self.state.phase {
-            RobotPhase::InitialWallFind => self.execute_initial_wall_find(_all_robots),
+            RobotPhase::InitialWallFind => self.execute_initial_wall_find(all_robots),
+            RobotPhase::BoundaryScouting => self.execute_boundary_scouting_leg(all_robots, global_map),
             // TODO: Add other phases
             _ => {}
         }
@@ -127,8 +128,96 @@ impl RobotNode {
     }
 
     /// PHASE 2: Perform one leg of the iterative boundary scouting.
-    pub fn execute_boundary_scouting_leg(&mut self) {
-        // TODO: Implement
+    pub fn execute_boundary_scouting_leg(&mut self, all_robots: &[RobotNode], global_map: &GridMap) {
+        // Initialize state if first tick in this phase
+        if self.state.boundary_scout.is_none() {
+            let tracing_direction = if self.state.id == 0 { -1 } else { 1 }; // 0: left, 1: right
+            self.state.boundary_scout = Some(BoundaryScoutState {
+                tracing_direction,
+                steps_taken: 0,
+                returning: false,
+                path: vec![self.state.pose.position],
+            });
+            println!("Robot {} begins boundary scouting, tracing_direction {}", self.state.id, tracing_direction);
+        }
+        let scout_n = self.state.scout_depth_n;
+        // Split mutable and immutable borrows
+        let (tracing_direction, returning, steps_taken, path_len);
+        {
+            let scout = self.state.boundary_scout.as_ref().unwrap();
+            tracing_direction = scout.tracing_direction;
+            returning = scout.returning;
+            steps_taken = scout.steps_taken;
+            path_len = scout.path.len();
+        }
+        if returning {
+            if path_len > 1 {
+                if let Some(scout) = self.state.boundary_scout.as_mut() {
+                    scout.path.pop(); // Remove current position
+                    let prev = *scout.path.last().unwrap();
+                    println!("Robot {} returns to ({}, {})", self.state.id, prev.x, prev.y);
+                    self.state.pose.position = prev;
+                }
+            }
+            // Check for rendezvous (in comm range)
+            let partner = all_robots.iter().find(|r| r.state.id == self.state.partner_id).unwrap();
+            if Self::within_comm_range(&self.state.pose.position, &partner.state.pose.position) {
+                println!("Robot {} rendezvous with partner {}. Doubling n.", self.state.id, partner.state.id);
+                self.state.scout_depth_n *= 2;
+                self.state.boundary_scout = None; // Start new leg next tick
+            }
+            return;
+        }
+        if steps_taken < scout_n {
+            let next = self.wall_follow_step(global_map, tracing_direction);
+            if let Some(next_pos) = next {
+                println!("Robot {} wall-follows to ({}, {})", self.state.id, next_pos.x, next_pos.y);
+                self.state.pose.position = next_pos;
+                if let Some(scout) = self.state.boundary_scout.as_mut() {
+                    scout.path.push(next_pos);
+                    scout.steps_taken += 1;
+                }
+            } else {
+                println!("Robot {} cannot wall-follow, stays at ({}, {})", self.state.id, self.state.pose.position.x, self.state.pose.position.y);
+            }
+        } else {
+            if let Some(scout) = self.state.boundary_scout.as_mut() {
+                scout.returning = true;
+            }
+            println!("Robot {} finished {} steps, returning.", self.state.id, scout_n);
+        }
+    }
+
+    /// Wall-following step: try to move forward, else turn (left/right) to follow wall.
+    /// Returns the next position if a move is possible.
+    pub fn wall_follow_step(&self, global_map: &GridMap, tracing_direction: i8) -> Option<Point> {
+        // Facing up (-Y), tracing_direction: -1=left, +1=right
+        // Try: left, forward, right, back (relative to current orientation)
+        let dirs = [
+            (-1, 0), // left
+            (0, -1), // forward
+            (1, 0),  // right
+            (0, 1),  // back
+        ];
+        let order = if tracing_direction == -1 {
+            [0, 1, 2, 3] // left wall-follow: left, forward, right, back
+        } else {
+            [2, 1, 0, 3] // right wall-follow: right, forward, left, back
+        };
+        let pos = self.state.pose.position;
+        for &i in &order {
+            let (dx, dy) = dirs[i];
+            let nx = pos.x + dx;
+            let ny = pos.y + dy;
+            if nx < 0 || ny < 0 || nx >= global_map.width as i32 || ny >= global_map.height as i32 {
+                continue;
+            }
+            let idx = (ny as usize) * global_map.width + (nx as usize);
+            if global_map.cells[idx] != CellState::Obstacle {
+                return Some(Point { x: nx, y: ny });
+            }
+        }
+        None
     }
 
     /// PHASE 3: Analyze a completed loop to determine if it's an island.

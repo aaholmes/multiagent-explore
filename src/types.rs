@@ -41,6 +41,15 @@ pub struct GridMap {
     // Optionally, add costmap or other fields as needed
 }
 
+/// State for boundary scouting phase
+#[derive(Clone, Debug)]
+pub struct BoundaryScoutState {
+    pub tracing_direction: i8, // -1 for left, +1 for right
+    pub steps_taken: u32,
+    pub returning: bool,
+    pub path: Vec<Point>,
+}
+
 /// State information for a single robot.
 #[derive(Clone, Debug)]
 pub struct RobotState {
@@ -53,6 +62,7 @@ pub struct RobotState {
     pub last_known_partner_pose: Option<Pose>,
     pub loop_analysis_data: Option<LoopAnalysisData>,
     pub travel_direction_before_island: Option<f64>,
+    pub boundary_scout: Option<BoundaryScoutState>,
 }
 
 /// Data collected during a boundary trace to analyze a closed loop.

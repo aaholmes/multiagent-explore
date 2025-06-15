@@ -1,6 +1,9 @@
 use multiagent_explore::simulation_manager::SimulationManager;
 use multiagent_explore::robot_node::RobotNode;
+use multiagent_explore::types::RobotPhase;
 use std::env;
+
+mod visualize;
 
 /// Main entry point for the multi-robot exploration simulation.
 fn main() {
@@ -26,8 +29,10 @@ fn main() {
         }
     };
 
-    // Run the simulation for a fixed number of ticks (e.g., 10)
-    for tick in 0..10 {
+    // Store history for visualization
+    let mut history = Vec::new();
+    let mut tick = 0;
+    loop {
         println!("=== Tick {} ===", tick);
         for (i, robot) in sim.robots.iter().enumerate() {
             println!("Robot {}: pos=({}, {}), phase={:?}",
@@ -52,11 +57,29 @@ fn main() {
         }
         // 3. Display maps
         sim.print_all_maps();
+        // Save state for visualization
+        history.push(sim.robots.clone());
         // 4. Move
         let robots_snapshot = sim.robots.clone();
         for robot in &mut sim.robots {
             robot.tick(&robots_snapshot, &sim.map);
         }
+        // Check for Phase 2 completion: both robots in BoundaryScouting and ready to start a new leg
+        let all_ready = sim.robots.iter().all(|r|
+            r.state.phase == RobotPhase::BoundaryScouting && r.state.boundary_scout.is_none()
+        );
+        if all_ready {
+            println!("Phase 2 completed: both robots rendezvoused and ready to start a new leg.");
+            break;
+        }
+        tick += 1;
+        if tick > 500 { // safety limit
+            println!("Simulation stopped after 500 ticks.");
+            break;
+        }
     }
-    println!("Simulation complete.");
+    println!("Simulation complete. Launching visualization...");
+    let map_width = sim.map.width;
+    let map_height = sim.map.height;
+    visualize::visualize(&history, map_width, map_height);
 } 
