@@ -1,4 +1,5 @@
 use multiagent_explore::simulation_manager::SimulationManager;
+use multiagent_explore::robot_node::RobotNode;
 use std::env;
 
 /// Main entry point for the multi-robot exploration simulation.
@@ -36,8 +37,26 @@ fn main() {
                 robot.state.phase
             );
         }
+        // 1. See surroundings
+        for robot in &mut sim.robots {
+            robot.update_local_map(&sim.map);
+        }
+        // 2. Exchange maps if possible
+        let robots_snapshot = sim.robots.clone();
+        for robot in &mut sim.robots {
+            for other in &robots_snapshot {
+                if other.state.id != robot.state.id && RobotNode::within_comm_range(&robot.state.pose.position, &other.state.pose.position) {
+                    robot.merge_map(&other.state.map);
+                }
+            }
+        }
+        // 3. Display maps
         sim.print_all_maps();
-        sim.tick();
+        // 4. Move
+        let robots_snapshot = sim.robots.clone();
+        for robot in &mut sim.robots {
+            robot.tick(&robots_snapshot, &sim.map);
+        }
     }
     println!("Simulation complete.");
 } 

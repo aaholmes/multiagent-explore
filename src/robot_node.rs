@@ -9,21 +9,13 @@ pub struct RobotNode {
 
 impl RobotNode {
     /// The main decision-making loop, called on each simulation tick.
-    /// Accepts a reference to all robots for coordination and the global map for sensing.
-    pub fn tick(&mut self, all_robots: &[RobotNode], global_map: &GridMap) {
-        // Communication: merge maps if within range of any other robot
-        for other in all_robots {
-            if other.state.id != self.state.id && Self::within_comm_range(&self.state.pose.position, &other.state.pose.position) {
-                self.merge_map(&other.state.map);
-            }
-        }
+    /// Only performs movement; sensing and communication are handled externally.
+    pub fn tick(&mut self, _all_robots: &[RobotNode], _global_map: &GridMap) {
         match self.state.phase {
-            RobotPhase::InitialWallFind => self.execute_initial_wall_find(all_robots),
+            RobotPhase::InitialWallFind => self.execute_initial_wall_find(_all_robots),
             // TODO: Add other phases
             _ => {}
         }
-        // After moving, update local map with new surroundings
-        self.update_local_map(global_map);
     }
 
     /// Update the robot's local map with its current cell and four neighbors from the global map.
@@ -70,11 +62,11 @@ impl RobotNode {
         result
     }
 
-    /// Returns the state of the cell directly in front (+Y direction).
+    /// Returns the state of the cell directly in front (-Y direction, up).
     pub fn sense_front(&self) -> (Point, Option<CellState>) {
         let next_pos = Point {
             x: self.state.pose.position.x,
-            y: self.state.pose.position.y + 1,
+            y: self.state.pose.position.y - 1,
         };
         let width = self.state.map.width as i32;
         let height = self.state.map.height as i32;
@@ -86,7 +78,7 @@ impl RobotNode {
         }
     }
 
-    /// PHASE 1: Move in a straight line until a wall is seen directly in front.
+    /// PHASE 1: Move in a straight line until a wall is seen directly in front (now -Y direction).
     pub fn execute_initial_wall_find(&mut self, _all_robots: &[RobotNode]) {
         let (next_pos, cell) = self.sense_front();
         match cell {
@@ -98,7 +90,7 @@ impl RobotNode {
                 return;
             }
             _ => {
-                // Move forward (+Y)
+                // Move forward (-Y)
                 println!("Robot {} moves from ({}, {}) to ({}, {})", self.state.id, self.state.pose.position.x, self.state.pose.position.y, next_pos.x, next_pos.y);
                 self.state.pose.position = next_pos;
                 // Update local map (mark as empty)

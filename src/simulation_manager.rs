@@ -3,6 +3,7 @@ use crate::robot_node::RobotNode;
 use crate::map_loader;
 use rand::seq::SliceRandom;
 use rand::{SeedableRng, rngs::StdRng};
+use std::f64::consts::PI;
 
 /// Manages the simulation environment, robots, and clock.
 pub struct SimulationManager {
@@ -19,7 +20,7 @@ impl SimulationManager {
         Self { map, robots }
     }
 
-    /// Loads a map from a file and initializes two robots at random adjacent empty cells (not on the boundary).
+    /// Loads a map from a file and initializes two robots at random adjacent empty cells (left-to-right), both facing up (-Y direction).
     /// Accepts a random seed for reproducibility.
     pub fn from_map_file(path: &str, seed: u64) -> std::io::Result<Self> {
         let map = map_loader::load_map_from_file(path)?;
@@ -27,27 +28,21 @@ impl SimulationManager {
         let mut pairs = Vec::new();
         let w = map.width as i32;
         let h = map.height as i32;
-        let directions = [(0, 1), (1, 0), (0, -1), (-1, 0)];
+        // Only consider left-to-right pairs
         for y in 1..h-1 {
-            for x in 1..w-1 {
+            for x in 1..w-2 {
                 let idx = (y as usize) * map.width + (x as usize);
-                if map.cells[idx] != CellState::Empty { continue; }
-                for (dx, dy) in &directions {
-                    let nx = x + dx;
-                    let ny = y + dy;
-                    if nx < 1 || nx >= w-1 || ny < 1 || ny >= h-1 { continue; }
-                    let nidx = (ny as usize) * map.width + (nx as usize);
-                    if map.cells[nidx] == CellState::Empty {
-                        pairs.push(((x, y), (nx, ny)));
-                    }
+                let nidx = (y as usize) * map.width + ((x+1) as usize);
+                if map.cells[idx] == CellState::Empty && map.cells[nidx] == CellState::Empty {
+                    pairs.push(((x, y), (x+1, y)));
                 }
             }
         }
-        let &((x0, y0), (x1, y1)) = pairs.choose(&mut rng).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "No valid adjacent empty start positions found"))?;
+        let &((x0, y0), (x1, y1)) = pairs.choose(&mut rng).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "No valid adjacent left-right empty start positions found"))?;
         let mut robot_states = vec![
             RobotState {
                 id: 0,
-                pose: Pose { position: Point { x: x0, y: y0 }, orientation_rad: 0.0 },
+                pose: Pose { position: Point { x: x0, y: y0 }, orientation_rad: -PI/2.0 },
                 phase: RobotPhase::InitialWallFind,
                 map: GridMap {
                     width: map.width,
@@ -62,7 +57,7 @@ impl SimulationManager {
             },
             RobotState {
                 id: 1,
-                pose: Pose { position: Point { x: x1, y: y1 }, orientation_rad: 0.0 },
+                pose: Pose { position: Point { x: x1, y: y1 }, orientation_rad: -PI/2.0 },
                 phase: RobotPhase::InitialWallFind,
                 map: GridMap {
                     width: map.width,
@@ -76,12 +71,6 @@ impl SimulationManager {
                 travel_direction_before_island: None,
             },
         ];
-        // Set each robot's position as the center of its own map for visualization
-        for robot in &mut robot_states {
-            let center_x = (map.width / 2) as i32;
-            let center_y = (map.height / 2) as i32;
-            robot.pose.position = Point { x: center_x, y: center_y };
-        }
         // After setting positions, update each robot's local map with initial surroundings
         for robot in &mut robot_states {
             let mut node = RobotNode { state: robot.clone() };
