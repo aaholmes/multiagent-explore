@@ -23,7 +23,7 @@ struct VisualizeApp {
 
 impl VisualizeApp {
     pub fn new(history: Vec<Vec<RobotNode>>, map_width: usize, map_height: usize) -> Self {
-        Self { history, map_width, map_height, tick: 0, playing: false }
+        Self { history, map_width, map_height, tick: 0, playing: true }
     }
 }
 
@@ -77,24 +77,46 @@ impl App for VisualizeApp {
                     for x in 0..self.map_width {
                         let idx = y * self.map_width + x;
                         let cell = robot.state.map.cells[idx];
-                        let color = match cell {
-                            CellState::Obstacle => Some(egui::Color32::BLACK),
-                            CellState::Empty => Some(egui::Color32::WHITE),
-                            CellState::Unexplored => None,
-                        };
-                        if let Some(color) = color {
-                            let x0 = map_rect.left_top().x + x as f32 * 20.0;
-                            let y0 = map_rect.left_top().y + y as f32 * 20.0;
-                            let x1 = x0 + 20.0;
-                            let y1 = y0 + 20.0;
-                            painter.rect_filled(
-                                egui::Rect::from_min_max(
-                                    egui::pos2(x0, y0),
-                                    egui::pos2(x1, y1),
-                                ),
-                                0.0,
-                                color,
-                            );
+                        match cell {
+                            CellState::Obstacle => {
+                                let x0 = map_rect.left_top().x + x as f32 * 20.0;
+                                let y0 = map_rect.left_top().y + y as f32 * 20.0;
+                                let x1 = x0 + 20.0;
+                                let y1 = y0 + 20.0;
+                                // Black fill
+                                painter.rect_filled(
+                                    egui::Rect::from_min_max(
+                                        egui::pos2(x0, y0),
+                                        egui::pos2(x1, y1),
+                                    ),
+                                    0.0,
+                                    egui::Color32::BLACK,
+                                );
+                                // White border
+                                painter.rect_stroke(
+                                    egui::Rect::from_min_max(
+                                        egui::pos2(x0, y0),
+                                        egui::pos2(x1, y1),
+                                    ),
+                                    0.0,
+                                    egui::Stroke::new(1.5, egui::Color32::WHITE),
+                                );
+                            }
+                            CellState::Empty => {
+                                let x0 = map_rect.left_top().x + x as f32 * 20.0;
+                                let y0 = map_rect.left_top().y + y as f32 * 20.0;
+                                let x1 = x0 + 20.0;
+                                let y1 = y0 + 20.0;
+                                painter.rect_filled(
+                                    egui::Rect::from_min_max(
+                                        egui::pos2(x0, y0),
+                                        egui::pos2(x1, y1),
+                                    ),
+                                    0.0,
+                                    egui::Color32::WHITE,
+                                );
+                            }
+                            CellState::Unexplored => {}
                         }
                     }
                 }
