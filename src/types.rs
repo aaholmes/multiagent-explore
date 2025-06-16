@@ -48,6 +48,7 @@ pub struct BoundaryScoutState {
     pub steps_taken: u32,
     pub returning: bool,
     pub path: Vec<Point>,
+    pub first_move: bool,
 }
 
 /// State information for a single robot.

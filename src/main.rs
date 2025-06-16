@@ -72,12 +72,10 @@ fn main() {
             let r1 = &sim.robots[1];
 
             let r0_tracing = r0.state.phase == RobotPhase::BoundaryScouting &&
-                             r0.state.boundary_scout.is_some() &&
-                             !r0.state.boundary_scout.as_ref().unwrap().returning;
+                             r0.state.boundary_scout.as_ref().map_or(false, |s| !s.returning && s.steps_taken > 0);
 
             let r1_tracing = r1.state.phase == RobotPhase::BoundaryScouting &&
-                             r1.state.boundary_scout.is_some() &&
-                             !r1.state.boundary_scout.as_ref().unwrap().returning;
+                             r1.state.boundary_scout.as_ref().map_or(false, |s| !s.returning && s.steps_taken > 0);
 
             if r0_tracing && r1_tracing && RobotNode::within_comm_range(&r0.state.pose.position, &r1.state.pose.position) {
                 println!("Loop closure detected: both robots are tracing and in communication range.");

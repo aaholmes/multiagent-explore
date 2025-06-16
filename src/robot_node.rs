@@ -13,7 +13,7 @@ impl RobotNode {
     /// Only performs movement; sensing and communication are handled externally.
     pub fn tick(&mut self, all_robots: &[RobotNode], global_map: &GridMap) {
         match self.state.phase {
-            RobotPhase::InitialWallFind => self.execute_initial_wall_find(all_robots),
+            RobotPhase::InitialWallFind => self.execute_initial_wall_find(all_robots, global_map),
             RobotPhase::BoundaryScouting => self.execute_boundary_scouting_leg(all_robots, global_map),
             // TODO: Add other phases
             _ => {}
@@ -81,14 +81,17 @@ impl RobotNode {
     }
 
     /// PHASE 1: Move in a straight line until a wall is seen directly in front (now -Y direction).
-    pub fn execute_initial_wall_find(&mut self, _all_robots: &[RobotNode]) {
+    pub fn execute_initial_wall_find(&mut self, all_robots: &[RobotNode], global_map: &GridMap) {
         let (next_pos, cell) = self.sense_front();
         match cell {
             Some(CellState::Obstacle) => {
                 if self.state.phase != RobotPhase::BoundaryScouting {
-                    println!("Robot {} sees obstacle in front at ({}, {}), stopping.", self.state.id, next_pos.x, next_pos.y);
+                    println!("Robot {} sees obstacle in front at ({}, {}), stopping and starting boundary scouting.", self.state.id, next_pos.x, next_pos.y);
                     self.state.phase = RobotPhase::BoundaryScouting;
+                    // Immediately begin boundary scouting
+                    self.execute_boundary_scouting_leg(all_robots, global_map);
                 }
+                // If already in BoundaryScouting, just return
                 return;
             }
             _ => {
@@ -138,18 +141,20 @@ impl RobotNode {
                 steps_taken: 0,
                 returning: false,
                 path: vec![self.state.pose.position],
+                first_move: true,
             });
             println!("Robot {} begins boundary scouting, tracing_direction {}", self.state.id, tracing_direction);
         }
         let scout_n = self.state.scout_depth_n;
         // Split mutable and immutable borrows
-        let (tracing_direction, returning, steps_taken, path_len);
+        let (tracing_direction, returning, steps_taken, path_len, first_move);
         {
             let scout = self.state.boundary_scout.as_ref().unwrap();
             tracing_direction = scout.tracing_direction;
             returning = scout.returning;
             steps_taken = scout.steps_taken;
             path_len = scout.path.len();
+            first_move = scout.first_move;
         }
         if returning {
             if path_len > 1 {
@@ -170,7 +175,16 @@ impl RobotNode {
             return;
         }
         if steps_taken < scout_n {
-            let next = self.wall_follow_step(global_map, tracing_direction);
+            let next = if first_move {
+                // On the first move, always turn away from the partner
+                if tracing_direction == -1 {
+                    self.wall_follow_step_first_move(global_map, -1) // Robot 0: prioritize left
+                } else {
+                    self.wall_follow_step_first_move(global_map, 1) // Robot 1: prioritize right
+                }
+            } else {
+                self.wall_follow_step(global_map, tracing_direction)
+            };
             if let Some(next_pos) = next {
                 println!("Robot {} wall-follows to ({}, {})", self.state.id, next_pos.x, next_pos.y);
                 let prev_pos = self.state.pose.position;
@@ -179,6 +193,9 @@ impl RobotNode {
                 if let Some(scout) = self.state.boundary_scout.as_mut() {
                     scout.path.push(next_pos);
                     scout.steps_taken += 1;
+                    if scout.first_move {
+                        scout.first_move = false;
+                    }
                 }
             } else {
                 println!("Robot {} cannot wall-follow, stays at ({}, {})", self.state.id, self.state.pose.position.x, self.state.pose.position.y);
@@ -189,6 +206,42 @@ impl RobotNode {
             }
             println!("Robot {} finished {} steps, returning.", self.state.id, scout_n);
         }
+    }
+
+    /// Wall-following step for the very first move after hitting the wall.
+    /// Robot 0: prioritize left, Robot 1: prioritize right.
+    pub fn wall_follow_step_first_move(&self, global_map: &GridMap, tracing_direction: i8) -> Option<Point> {
+        let (current_dx, current_dy) = self.get_direction_vector();
+        let current_pos = self.state.pose.position;
+        let dirs = if tracing_direction == -1 {
+            // Robot 0: prioritize left, then forward, then right, then back
+            vec![
+                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (current_dx, current_dy),   // Forward
+                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (-current_dx, -current_dy), // Back
+            ]
+        } else {
+            // Robot 1: prioritize right, then forward, then left, then back
+            vec![
+                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (current_dx, current_dy),   // Forward
+                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (-current_dx, -current_dy), // Back
+            ]
+        };
+        for (rdx, rdy) in dirs {
+            let nx = current_pos.x + rdx;
+            let ny = current_pos.y + rdy;
+            if nx < 0 || ny < 0 || nx >= global_map.width as i32 || ny >= global_map.height as i32 {
+                continue;
+            }
+            let idx = (ny as usize) * global_map.width + (nx as usize);
+            if global_map.cells[idx] != CellState::Obstacle {
+                return Some(Point { x: nx, y: ny });
+            }
+        }
+        None
     }
 
     /// Translates the robot's orientation_rad into a (dx, dy) movement vector.
@@ -353,6 +406,7 @@ mod tests {
                 steps_taken: 0,
                 returning: false,
                 path: vec![Point { x: 1, y: 1 }],
+                first_move: true,
             }),
         };
         let mut robot0 = RobotNode { state: robot0_state };
@@ -409,6 +463,7 @@ mod tests {
                 steps_taken: 0,
                 returning: false,
                 path: vec![Point { x: 1, y: 1 }],
+                first_move: true,
             }),
         };
         let mut robot1 = RobotNode { state: robot1_state };
