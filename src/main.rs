@@ -64,12 +64,40 @@ fn main() {
         for robot in &mut sim.robots {
             robot.tick(&robots_snapshot, &sim.map);
         }
-        // Check for Phase 2 completion: both robots in BoundaryScouting and ready to start a new leg
-        let all_ready = sim.robots.iter().all(|r|
-            r.state.phase == RobotPhase::BoundaryScouting && r.state.boundary_scout.is_none()
+
+        // Check for loop closure (both robots tracing and within communication range)
+        let mut loop_closed = false;
+        if sim.robots.len() == 2 { // Assuming 2 robots for this phase
+            let r0 = &sim.robots[0];
+            let r1 = &sim.robots[1];
+
+            let r0_tracing = r0.state.phase == RobotPhase::BoundaryScouting &&
+                             r0.state.boundary_scout.is_some() &&
+                             !r0.state.boundary_scout.as_ref().unwrap().returning;
+
+            let r1_tracing = r1.state.phase == RobotPhase::BoundaryScouting &&
+                             r1.state.boundary_scout.is_some() &&
+                             !r1.state.boundary_scout.as_ref().unwrap().returning;
+
+            if r0_tracing && r1_tracing && RobotNode::within_comm_range(&r0.state.pose.position, &r1.state.pose.position) {
+                println!("Loop closure detected: both robots are tracing and in communication range.");
+                loop_closed = true;
+            }
+        }
+
+        if loop_closed {
+            // Transition both robots to BoundaryAnalysis
+            for robot in &mut sim.robots {
+                robot.state.phase = RobotPhase::BoundaryAnalysis;
+            }
+        }
+
+        // Check for Phase 2 completion: both robots have transitioned to BoundaryAnalysis
+        let all_boundary_analyzed = sim.robots.iter().all(|r|
+            r.state.phase == RobotPhase::BoundaryAnalysis
         );
-        if all_ready {
-            println!("Phase 2 completed: both robots rendezvoused and ready to start a new leg.");
+        if all_boundary_analyzed {
+            println!("Phase 2 (Boundary Scouting) completed and loop analyzed.");
             break;
         }
         tick += 1;

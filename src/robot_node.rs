@@ -1,4 +1,5 @@
 use crate::types::*;
+use std::f64::consts::PI;
 
 /// Main robot logic node, encapsulating state and behavior.
 #[derive(Debug, Clone)]
@@ -172,6 +173,8 @@ impl RobotNode {
             let next = self.wall_follow_step(global_map, tracing_direction);
             if let Some(next_pos) = next {
                 println!("Robot {} wall-follows to ({}, {})", self.state.id, next_pos.x, next_pos.y);
+                let prev_pos = self.state.pose.position;
+                self.update_orientation(prev_pos, next_pos); // Update orientation before move
                 self.state.pose.position = next_pos;
                 if let Some(scout) = self.state.boundary_scout.as_mut() {
                     scout.path.push(next_pos);
@@ -188,30 +191,82 @@ impl RobotNode {
         }
     }
 
+    /// Translates the robot's orientation_rad into a (dx, dy) movement vector.
+    pub fn get_direction_vector(&self) -> (i32, i32) {
+        // Normalize angle to be between -PI and PI
+        let angle = self.state.pose.orientation_rad.rem_euclid(2.0 * PI);
+        let angle_deg = angle.to_degrees().round() as i32;
+
+        // Using rounded degrees to avoid floating point comparison issues
+        // North (-Y): -90 or 270
+        // South (+Y): 90
+        // East (+X): 0
+        // West (-X): 180 or -180
+
+        if angle_deg == 0 { // East
+            (1, 0)
+        } else if angle_deg == 90 { // South
+            (0, 1)
+        } else if angle_deg == 180 || angle_deg == -180 { // West
+            (-1, 0)
+        } else if angle_deg == 270 || angle_deg == -90 { // North
+            (0, -1)
+        } else {
+            // Default to North if orientation is not one of the cardinal directions
+            println!("Warning: Robot {} has non-cardinal orientation: {}. Defaulting to North.", self.state.id, self.state.pose.orientation_rad.to_degrees());
+            (0, -1)
+        }
+    }
+
+    /// Updates the robot's orientation based on its previous position and new position.
+    pub fn update_orientation(&mut self, prev_pos: Point, next_pos: Point) {
+        let dx = next_pos.x - prev_pos.x;
+        let dy = next_pos.y - prev_pos.y;
+        self.state.pose.orientation_rad = match (dx, dy) {
+            (1, 0) => 0.0,    // East
+            (-1, 0) => PI,   // West
+            (0, 1) => PI / 2.0, // South
+            (0, -1) => -PI / 2.0, // North
+            _ => self.state.pose.orientation_rad, // No change or invalid move
+        };
+    }
+
     /// Wall-following step: try to move forward, else turn (left/right) to follow wall.
     /// Returns the next position if a move is possible.
     pub fn wall_follow_step(&self, global_map: &GridMap, tracing_direction: i8) -> Option<Point> {
-        // Facing up (-Y), tracing_direction: -1=left, +1=right
-        // Try: left, forward, right, back (relative to current orientation)
-        let dirs = [
-            (-1, 0), // left
-            (0, -1), // forward
-            (1, 0),  // right
-            (0, 1),  // back
-        ];
-        let order = if tracing_direction == -1 {
-            [0, 1, 2, 3] // left wall-follow: left, forward, right, back
-        } else {
-            [2, 1, 0, 3] // right wall-follow: right, forward, left, back
-        };
-        let pos = self.state.pose.position;
-        for &i in &order {
-            let (dx, dy) = dirs[i];
-            let nx = pos.x + dx;
-            let ny = pos.y + dy;
+        // Facing: 0=East (+X), PI/2=South (+Y), PI=West (-X), -PI/2=North (-Y)
+        let (current_dx, current_dy) = self.get_direction_vector();
+        let current_pos = self.state.pose.position;
+
+        // Define relative directions based on current orientation
+        // (dx, dy) represents changes in x and y coordinates relative to the current position
+        // Order of checks depends on tracing_direction (left-hand or right-hand rule)
+        let relative_dirs: Vec<(i32, i32)>;
+
+        if tracing_direction == -1 { // Robot 0: Prioritize Right, then Forward, then Left, then Back
+            relative_dirs = vec![
+                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (current_dx, current_dy),   // Forward
+                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (-current_dx, -current_dy), // Back (180 degree turn)
+            ];
+        } else { // Robot 1: Prioritize Left, then Forward, then Right, then Back
+            relative_dirs = vec![
+                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (current_dx, current_dy),   // Forward
+                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (-current_dx, -current_dy), // Back (180 degree turn)
+            ];
+        }
+
+        for (rdx, rdy) in relative_dirs {
+            let nx = current_pos.x + rdx;
+            let ny = current_pos.y + rdy;
+
             if nx < 0 || ny < 0 || nx >= global_map.width as i32 || ny >= global_map.height as i32 {
-                continue;
+                continue; // Out of bounds, consider it an obstacle
             }
+
             let idx = (ny as usize) * global_map.width + (nx as usize);
             if global_map.cells[idx] != CellState::Obstacle {
                 return Some(Point { x: nx, y: ny });
@@ -243,5 +298,142 @@ impl RobotNode {
                 self.state.map.cells[i] = cell;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f64::consts::PI;
+
+    // Helper function to create a simple grid map for testing
+    fn create_test_map(cells: &[&str]) -> GridMap {
+        let height = cells.len();
+        let width = cells[0].len();
+        let mut map_cells = vec![CellState::Unexplored; width * height];
+        for (y, row) in cells.iter().enumerate() {
+            for (x, char) in row.chars().enumerate() {
+                let idx = y * width + x;
+                map_cells[idx] = match char {
+                    '#' => CellState::Obstacle,
+                    '.' => CellState::Empty,
+                    ' ' => CellState::Unexplored,
+                    _ => CellState::Unexplored,
+                };
+            }
+        }
+        GridMap { width, height, cells: map_cells }
+    }
+
+    #[test]
+    fn test_robot0_wall_follow_left_hand_simple_wall() {
+        // Map: 
+        // # # #
+        // # . .
+        // # # #
+        let map = create_test_map(&[
+            "###",
+            "#..",
+            "###",
+        ]);
+
+        // Robot 0 (left-hand rule), starts at (1,1) facing North (-Y)
+        let robot0_state = RobotState {
+            id: 0,
+            pose: Pose { position: Point { x: 1, y: 1 }, orientation_rad: -PI / 2.0 }, // Facing North
+            phase: RobotPhase::BoundaryScouting,
+            map: map.clone(), // Robot's initial knowledge of the map
+            scout_depth_n: 10,
+            partner_id: 1,
+            last_known_partner_pose: None,
+            loop_analysis_data: None,
+            travel_direction_before_island: None,
+            boundary_scout: Some(BoundaryScoutState {
+                tracing_direction: -1,
+                steps_taken: 0,
+                returning: false,
+                path: vec![Point { x: 1, y: 1 }],
+            }),
+        };
+        let mut robot0 = RobotNode { state: robot0_state };
+
+        // Step 1: Robot 0 (left-hand rule), at (1,1) facing North. Wall to the left (West).
+        // Prioritize: Left (East), Forward (North), Right (West), Back (South).
+        // From (1,1) facing North: 
+        // Left (East): (2,1) - Empty. Should move to (2,1), facing East.
+        let next_pos = robot0.wall_follow_step(&map, -1).unwrap();
+        assert_eq!(next_pos, Point { x: 2, y: 1 });
+        robot0.update_orientation(Point { x: 1, y: 1 }, next_pos);
+        robot0.state.pose.position = next_pos;
+        assert_eq!(robot0.state.pose.orientation_rad.to_degrees().round() as i32, 0); // Facing East
+
+        // Step 2: Robot 0 at (2,1) facing East. Wall to the left (North).
+        // Prioritize: Left (North), Forward (East), Right (South), Back (West).
+        // From (2,1) facing East:
+        // Left (North): (2,0) - Obstacle (#)
+        // Forward (East): (3,1) - Out of bounds
+        // Right (South): (2,2) - Obstacle (#)
+        // Back (West): (1,1) - Empty (.). Should move to (1,1), facing West.
+        let next_pos = robot0.wall_follow_step(&map, -1).unwrap();
+        assert_eq!(next_pos, Point { x: 1, y: 1 });
+        robot0.update_orientation(Point { x: 2, y: 1 }, next_pos);
+        robot0.state.pose.position = next_pos;
+        assert_eq!(robot0.state.pose.orientation_rad.to_degrees().round() as i32, 180); // Facing West
+    }
+
+    #[test]
+    fn test_robot1_wall_follow_right_hand_simple_wall() {
+        // Map: 
+        // # # #
+        // . . #
+        // # # #
+        let map = create_test_map(&[
+            "###",
+            "..#",
+            "###",
+        ]);
+
+        // Robot 1 (right-hand rule), starts at (1,1) facing North (-Y)
+        let robot1_state = RobotState {
+            id: 1,
+            pose: Pose { position: Point { x: 1, y: 1 }, orientation_rad: -PI / 2.0 }, // Facing North
+            phase: RobotPhase::BoundaryScouting,
+            map: map.clone(), // Robot's initial knowledge of the map
+            scout_depth_n: 10,
+            partner_id: 0,
+            last_known_partner_pose: None,
+            loop_analysis_data: None,
+            travel_direction_before_island: None,
+            boundary_scout: Some(BoundaryScoutState {
+                tracing_direction: 1,
+                steps_taken: 0,
+                returning: false,
+                path: vec![Point { x: 1, y: 1 }],
+            }),
+        };
+        let mut robot1 = RobotNode { state: robot1_state };
+
+        // Step 1: Robot 1 (right-hand rule), at (1,1) facing North. Wall to the right (East).
+        // Prioritize: Right (West), Forward (North), Left (East), Back (South).
+        // From (1,1) facing North:
+        // Right (West): (0,1) - Empty (.). Should move to (0,1), facing West.
+        let next_pos = robot1.wall_follow_step(&map, 1).unwrap();
+        assert_eq!(next_pos, Point { x: 0, y: 1 });
+        robot1.update_orientation(Point { x: 1, y: 1 }, next_pos);
+        robot1.state.pose.position = next_pos;
+        assert_eq!(robot1.state.pose.orientation_rad.to_degrees().round() as i32, 180); // Facing West
+
+        // Step 2: Robot 1 at (0,1) facing West. Wall to the right (South).
+        // Prioritize: Right (South), Forward (West), Left (North), Back (East).
+        // From (0,1) facing West:
+        // Right (South): (0,2) - Obstacle (#)
+        // Forward (West): (-1,1) - Out of bounds
+        // Left (North): (0,0) - Obstacle (#)
+        // Back (East): (1,1) - Empty (.). Should move to (1,1), facing East.
+        let next_pos = robot1.wall_follow_step(&map, 1).unwrap();
+        assert_eq!(next_pos, Point { x: 1, y: 1 });
+        robot1.update_orientation(Point { x: 0, y: 1 }, next_pos);
+        robot1.state.pose.position = next_pos;
+        assert_eq!(robot1.state.pose.orientation_rad.to_degrees().round() as i32, 0); // Facing East
     }
 } 
