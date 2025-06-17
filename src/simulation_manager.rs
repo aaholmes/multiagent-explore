@@ -16,7 +16,7 @@ pub struct SimulationManager {
 impl SimulationManager {
     /// Initializes the simulation with a map and two robots.
     pub fn new(map: GridMap, robot_states: Vec<RobotState>) -> Self {
-        let robots = robot_states.into_iter().map(|state| RobotNode { state }).collect();
+        let robots = robot_states.into_iter().map(|state| RobotNode::new(state)).collect();
         Self { map, robots }
     }
 
@@ -75,7 +75,7 @@ impl SimulationManager {
         ];
         // After setting positions, update each robot's local map with initial surroundings
         for robot in &mut robot_states {
-            let mut node = RobotNode { state: robot.clone() };
+            let mut node = RobotNode::new(robot.clone());
             node.update_local_map(&map);
             *robot = node.state;
         }
