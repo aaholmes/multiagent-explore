@@ -70,10 +70,14 @@ fn main() {
         // Loop closure detection is now handled within individual robot logic
         // No need for global loop closure detection here
 
-        // Check for Phase 2 completion: both robots have transitioned to BoundaryAnalysis
+        // Check for simulation completion conditions
         let all_boundary_analyzed = sim.robots.iter().all(|r|
             r.state.phase == RobotPhase::BoundaryAnalysis
         );
+        let all_in_advanced_phases = sim.robots.iter().all(|r|
+            matches!(r.state.phase, RobotPhase::IslandEscape | RobotPhase::InteriorSweep)
+        );
+        
         if all_boundary_analyzed {
             if phase2_completed {
                 println!("Phase 2 (Boundary Scouting) completed and loop analyzed.");
@@ -81,6 +85,10 @@ fn main() {
             } else {
                 phase2_completed = true;
             }
+        } else if all_in_advanced_phases {
+            println!("Robots have progressed to advanced exploration phases (IslandEscape/InteriorSweep).");
+            println!("Stopping simulation after successful boundary analysis and phase transition.");
+            break;
         }
 
         tick += 1;

@@ -18,6 +18,14 @@ pub enum RobotPhase {
     InteriorSweep,
 }
 
+/// Result of boundary analysis
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum BoundaryAnalysisResult {
+    Incomplete,  // Boundary trace is not complete
+    Island,      // Closed loop that doesn't touch map boundaries (obstacle)
+    ExteriorWall, // Closed loop that touches map boundaries (room perimeter)
+}
+
 /// Simple 2D integer coordinates for the grid.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Point {
@@ -51,6 +59,7 @@ pub struct BoundaryScoutState {
     pub path: Vec<Point>,
     pub first_move: bool,
     pub initial_scouting_direction: Option<Point>, // Store the first direction taken when hitting wall
+    pub total_rotation_steps: i32, // Total rotation in 90-degree steps (positive = counterclockwise)
 }
 
 /// State information for a single robot.
