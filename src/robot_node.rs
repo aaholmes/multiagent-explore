@@ -15,6 +15,7 @@ impl RobotNode {
         match self.state.phase {
             RobotPhase::InitialWallFind => self.execute_initial_wall_find(all_robots, global_map),
             RobotPhase::BoundaryScouting => self.execute_boundary_scouting_leg(all_robots, global_map),
+            RobotPhase::BoundaryAnalysis => self.execute_boundary_analysis(all_robots, global_map),
             // TODO: Add other phases
             _ => {}
         }
@@ -262,7 +263,11 @@ impl RobotNode {
                 // Only consider rendezvous if at least one step has been taken in this leg
                 // and the partner is not the current position (to avoid self-rendezvous issues)
                 if !first_move && Self::within_comm_range(&self.state.pose.position, &partner.state.pose.position) && self.state.pose.position != partner.state.pose.position {
-                    println!("Robot {} rendezvous with partner {} during scouting leg. Transitioning to BOUNDARY_ANALYSIS and doubling n.", self.state.id, partner.state.id);
+                    println!("Robot {} rendezvous with partner {} during scouting leg. Transitioning to BOUNDARY_ANALYSIS.", self.state.id, partner.state.id);
+                    
+                    // Map sharing happens automatically in the main simulation loop
+                    // when robots are within communication range
+                    
                     self.state.phase = RobotPhase::BoundaryAnalysis;
                     self.state.scout_depth_n *= 2;
                     self.state.boundary_scout = None; // Reset state for the next phase
@@ -423,6 +428,31 @@ impl RobotNode {
             if cell != CellState::Unexplored {
                 self.state.map.cells[i] = cell;
             }
+        }
+    }
+
+    /// PHASE 3: Analyze the boundary trace to determine if it's a closed loop (island)
+    pub fn execute_boundary_analysis(&mut self, all_robots: &[RobotNode], _global_map: &GridMap) {
+        println!("Robot {} executing boundary analysis", self.state.id);
+        
+        // For now, we'll assume the boundary is complete and move to the next phase
+        // In a full implementation, we would:
+        // 1. Analyze the traced path for closure
+        // 2. Determine if it's an island or the outer boundary
+        // 3. Plan the next course of action
+        
+        // Check if both robots are in boundary analysis phase
+        let partner = all_robots.iter().find(|r| r.state.id == self.state.partner_id).unwrap();
+        if partner.state.phase == RobotPhase::BoundaryAnalysis {
+            println!("Robot {} and partner {} both in boundary analysis. Analysis complete.", 
+                     self.state.id, partner.state.id);
+            
+            // For now, we'll consider the boundary analysis complete
+            // In a full implementation, we would transition to the next appropriate phase
+            // based on the analysis results (IslandEscape, CentralScan, etc.)
+            
+            // Stay in BoundaryAnalysis phase for now - the simulation will end when both robots
+            // are in this phase, as implemented in main.rs
         }
     }
 }

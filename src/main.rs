@@ -32,7 +32,9 @@ fn main() {
     // Store history for visualization
     let mut history = Vec::new();
     let mut tick = 0;
+    let mut phase2_completed = false;
     loop {
+        
         println!("=== Tick {} ===", tick);
         for (i, robot) in sim.robots.iter().enumerate() {
             println!("Robot {}: pos=({}, {}), phase={:?}",
@@ -73,9 +75,14 @@ fn main() {
             r.state.phase == RobotPhase::BoundaryAnalysis
         );
         if all_boundary_analyzed {
-            println!("Phase 2 (Boundary Scouting) completed and loop analyzed.");
-            break;
+            if phase2_completed {
+                println!("Phase 2 (Boundary Scouting) completed and loop analyzed.");
+                break;
+            } else {
+                phase2_completed = true;
+            }
         }
+
         tick += 1;
         if tick > 500 { // safety limit
             println!("Simulation stopped after 500 ticks.");
