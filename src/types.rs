@@ -45,10 +45,12 @@ pub struct GridMap {
 #[derive(Clone, Debug)]
 pub struct BoundaryScoutState {
     pub tracing_direction: i8, // -1 for left, +1 for right
-    pub steps_taken: u32,
+    pub steps_taken: u32, // Total steps taken in the current phase (BoundaryScouting)
+    pub steps_taken_this_scouting_mission: u32, // Steps taken in the current scouting leg
     pub returning: bool,
     pub path: Vec<Point>,
     pub first_move: bool,
+    pub initial_scouting_direction: Option<Point>, // Store the first direction taken when hitting wall
 }
 
 /// State information for a single robot.

@@ -65,30 +65,8 @@ fn main() {
             robot.tick(&robots_snapshot, &sim.map);
         }
 
-        // Check for loop closure (both robots tracing and within communication range)
-        let mut loop_closed = false;
-        if sim.robots.len() == 2 { // Assuming 2 robots for this phase
-            let r0 = &sim.robots[0];
-            let r1 = &sim.robots[1];
-
-            let r0_tracing = r0.state.phase == RobotPhase::BoundaryScouting &&
-                             r0.state.boundary_scout.as_ref().map_or(false, |s| !s.returning && s.steps_taken > 0);
-
-            let r1_tracing = r1.state.phase == RobotPhase::BoundaryScouting &&
-                             r1.state.boundary_scout.as_ref().map_or(false, |s| !s.returning && s.steps_taken > 0);
-
-            if r0_tracing && r1_tracing && RobotNode::within_comm_range(&r0.state.pose.position, &r1.state.pose.position) {
-                println!("Loop closure detected: both robots are tracing and in communication range.");
-                loop_closed = true;
-            }
-        }
-
-        if loop_closed {
-            // Transition both robots to BoundaryAnalysis
-            for robot in &mut sim.robots {
-                robot.state.phase = RobotPhase::BoundaryAnalysis;
-            }
-        }
+        // Loop closure detection is now handled within individual robot logic
+        // No need for global loop closure detection here
 
         // Check for Phase 2 completion: both robots have transitioned to BoundaryAnalysis
         let all_boundary_analyzed = sim.robots.iter().all(|r|

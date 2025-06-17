@@ -138,21 +138,40 @@ impl RobotNode {
             let tracing_direction = if self.state.id == 0 { -1 } else { 1 }; // 0: left, 1: right
             self.state.boundary_scout = Some(BoundaryScoutState {
                 tracing_direction,
-                steps_taken: 0,
+                steps_taken: 0, // This will now track total steps in the phase, not per leg
+                steps_taken_this_scouting_mission: 0, // New variable for current leg
                 returning: false,
                 path: vec![self.state.pose.position],
                 first_move: true,
+                initial_scouting_direction: None, // Will be set on first move
             });
             println!("Robot {} begins boundary scouting, tracing_direction {}", self.state.id, tracing_direction);
+        } else {
+            // If boundary_scout is already Some, it means we are starting a new leg after reconvening
+            // or continuing an existing leg.
+            // We need to ensure first_move is reset for the new leg if it's a new leg,
+            // but not if it's just a continuation.
+            // The logic for resetting steps_taken_this_scouting_mission and path
+            // is now handled when `returning` becomes false after a full return.
+            // The tracing_direction should persist.
+            if let Some(scout) = self.state.boundary_scout.as_mut() {
+                // If we just finished returning, and are starting a new leg, first_move should be true
+                // This is handled by the `returning` logic setting `returning = false` and clearing path.
+                // If `returning` is false, and `steps_taken_this_scouting_mission` is 0, it's a new leg.
+                if !scout.returning && scout.steps_taken_this_scouting_mission == 0 {
+                    scout.first_move = true;
+                }
+            }
         }
+
         let scout_n = self.state.scout_depth_n;
         // Split mutable and immutable borrows
-        let (tracing_direction, returning, steps_taken, path_len, first_move);
+        let (tracing_direction, returning, steps_taken_this_scouting_mission, path_len, first_move);
         {
             let scout = self.state.boundary_scout.as_ref().unwrap();
             tracing_direction = scout.tracing_direction;
             returning = scout.returning;
-            steps_taken = scout.steps_taken;
+            steps_taken_this_scouting_mission = scout.steps_taken_this_scouting_mission;
             path_len = scout.path.len();
             first_move = scout.first_move;
         }
@@ -161,41 +180,93 @@ impl RobotNode {
                 if let Some(scout) = self.state.boundary_scout.as_mut() {
                     scout.path.pop(); // Remove current position
                     let prev = *scout.path.last().unwrap();
-                    println!("Robot {} returns to ({}, {})", self.state.id, prev.x, prev.y);
+                    println!("Robot {} returns to ({}, {}). Path length remaining: {}", self.state.id, prev.x, prev.y, scout.path.len());
                     self.state.pose.position = prev;
                 }
-            }
-            // Check for rendezvous (in comm range)
-            let partner = all_robots.iter().find(|r| r.state.id == self.state.partner_id).unwrap();
-            if Self::within_comm_range(&self.state.pose.position, &partner.state.pose.position) {
-                println!("Robot {} rendezvous with partner {}. Doubling n.", self.state.id, partner.state.id);
+            } else {
+                // Robot has returned to the start of the leg
+                println!("Robot {} completed return scan. Doubling scout_depth_n ({} -> {}) and starting next leg.", self.state.id, scout_n, scout_n * 2);
                 self.state.scout_depth_n *= 2;
-                self.state.boundary_scout = None; // Start new leg next tick
+                if let Some(scout) = self.state.boundary_scout.as_mut() {
+                    scout.steps_taken_this_scouting_mission = 0;
+                    scout.returning = false;
+                    scout.path.clear(); // Clear path for the new leg
+                    scout.path.push(self.state.pose.position); // Add current position as start of new path
+                    scout.first_move = true; // Reset first_move for new scouting leg
+                }
             }
             return;
         }
-        if steps_taken < scout_n {
+        if steps_taken_this_scouting_mission < scout_n {
             let next = if first_move {
-                // On the first move, always turn away from the partner
-                if tracing_direction == -1 {
-                    self.wall_follow_step_first_move(global_map, -1) // Robot 0: prioritize left
+                // For first move, either record initial direction or reuse stored one
+                let current_pos = self.state.pose.position;
+                
+                // Check if we have stored initial direction
+                let stored_direction = self.state.boundary_scout.as_ref()
+                    .and_then(|scout| scout.initial_scouting_direction);
+                
+                if let Some(initial_dir) = stored_direction {
+                    // Reuse stored direction
+                    let next_pos = Point {
+                        x: current_pos.x + initial_dir.x,
+                        y: current_pos.y + initial_dir.y,
+                    };
+                    
+                    // Validate move
+                    if next_pos.x >= 0 && next_pos.y >= 0 && 
+                       next_pos.x < global_map.width as i32 && next_pos.y < global_map.height as i32 {
+                        let idx = (next_pos.y as usize) * global_map.width + (next_pos.x as usize);
+                        if global_map.cells[idx] != CellState::Obstacle {
+                            Some(next_pos)
+                        } else {
+                            // Fallback to normal wall following
+                            self.wall_follow_step_first_move(global_map, tracing_direction)
+                        }
+                    } else {
+                        // Fallback to normal wall following  
+                        self.wall_follow_step_first_move(global_map, tracing_direction)
+                    }
                 } else {
-                    self.wall_follow_step_first_move(global_map, 1) // Robot 1: prioritize right
+                    // First time, calculate and store direction
+                    let next_pos = self.wall_follow_step_first_move(global_map, tracing_direction);
+                    if let Some(pos) = next_pos {
+                        let direction = Point {
+                            x: pos.x - current_pos.x,
+                            y: pos.y - current_pos.y,
+                        };
+                        // Store the direction
+                        if let Some(scout) = self.state.boundary_scout.as_mut() {
+                            scout.initial_scouting_direction = Some(direction);
+                        }
+                    }
+                    next_pos
                 }
             } else {
                 self.wall_follow_step(global_map, tracing_direction)
             };
             if let Some(next_pos) = next {
-                println!("Robot {} wall-follows to ({}, {})", self.state.id, next_pos.x, next_pos.y);
+                println!("Robot {} wall-follows to ({}, {}) [step {}/{}]", self.state.id, next_pos.x, next_pos.y, steps_taken_this_scouting_mission + 1, scout_n);
                 let prev_pos = self.state.pose.position;
                 self.update_orientation(prev_pos, next_pos); // Update orientation before move
                 self.state.pose.position = next_pos;
                 if let Some(scout) = self.state.boundary_scout.as_mut() {
                     scout.path.push(next_pos);
-                    scout.steps_taken += 1;
-                    if scout.first_move {
-                        scout.first_move = false;
-                    }
+                    scout.steps_taken += 1; // Increment total steps in phase
+                    scout.steps_taken_this_scouting_mission += 1; // Always increment steps for current leg
+                    scout.first_move = false; // After the first move, it's no longer the first move
+                }
+
+                // Check for rendezvous during active scouting leg
+                let partner = all_robots.iter().find(|r| r.state.id == self.state.partner_id).unwrap();
+                // Only consider rendezvous if at least one step has been taken in this leg
+                // and the partner is not the current position (to avoid self-rendezvous issues)
+                if !first_move && Self::within_comm_range(&self.state.pose.position, &partner.state.pose.position) && self.state.pose.position != partner.state.pose.position {
+                    println!("Robot {} rendezvous with partner {} during scouting leg. Transitioning to BOUNDARY_ANALYSIS and doubling n.", self.state.id, partner.state.id);
+                    self.state.phase = RobotPhase::BoundaryAnalysis;
+                    self.state.scout_depth_n *= 2;
+                    self.state.boundary_scout = None; // Reset state for the next phase
+                    return; // Exit function as phase has changed
                 }
             } else {
                 println!("Robot {} cannot wall-follow, stays at ({}, {})", self.state.id, self.state.pose.position.x, self.state.pose.position.y);
@@ -203,10 +274,12 @@ impl RobotNode {
         } else {
             if let Some(scout) = self.state.boundary_scout.as_mut() {
                 scout.returning = true;
+                scout.steps_taken_this_scouting_mission = 0; // Reset for next leg
             }
             println!("Robot {} finished {} steps, returning.", self.state.id, scout_n);
         }
     }
+
 
     /// Wall-following step for the very first move after hitting the wall.
     /// Robot 0: prioritize left, Robot 1: prioritize right.
@@ -216,17 +289,17 @@ impl RobotNode {
         let dirs = if tracing_direction == -1 {
             // Robot 0: prioritize left, then forward, then right, then back
             vec![
-                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (current_dy, -current_dx),  // Relative Left (CCW rotation: 90° left from current)
                 (current_dx, current_dy),   // Forward
-                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (-current_dy, current_dx),  // Relative Right (CW rotation: 90° right from current)
                 (-current_dx, -current_dy), // Back
             ]
         } else {
             // Robot 1: prioritize right, then forward, then left, then back
             vec![
-                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (-current_dy, current_dx),  // Relative Right (CW rotation: 90° right from current)
                 (current_dx, current_dy),   // Forward
-                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (current_dy, -current_dx),  // Relative Left (CCW rotation: 90° left from current)
                 (-current_dx, -current_dy), // Back
             ]
         };
@@ -296,18 +369,18 @@ impl RobotNode {
         // Order of checks depends on tracing_direction (left-hand or right-hand rule)
         let relative_dirs: Vec<(i32, i32)>;
 
-        if tracing_direction == -1 { // Robot 0: Prioritize Right, then Forward, then Left, then Back
+        if tracing_direction == -1 { // Robot 0: Left-hand rule (keep wall on left, so try right first)
             relative_dirs = vec![
-                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (-current_dy, current_dx),  // Relative Right (CW rotation: 90° right from current)
                 (current_dx, current_dy),   // Forward
-                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (current_dy, -current_dx),  // Relative Left (CCW rotation: 90° left from current)
                 (-current_dx, -current_dy), // Back (180 degree turn)
             ];
-        } else { // Robot 1: Prioritize Left, then Forward, then Right, then Back
+        } else { // Robot 1: Right-hand rule (keep wall on right, so try left first)
             relative_dirs = vec![
-                (current_dy, -current_dx),  // Relative Left (CCW rotation)
+                (current_dy, -current_dx),  // Relative Left (CCW rotation: 90° left from current)
                 (current_dx, current_dy),   // Forward
-                (-current_dy, current_dx),  // Relative Right (CW rotation)
+                (-current_dy, current_dx),  // Relative Right (CW rotation: 90° right from current)
                 (-current_dx, -current_dy), // Back (180 degree turn)
             ];
         }
