@@ -117,7 +117,7 @@ impl CentralScanPhase {
         true
     }
     
-    /// Reset boundary scout state for virtual boundary tracing
+    /// Reset boundary scout state for virtual boundary tracing (no scouting missions)
     fn reset_boundary_scout_for_virtual_tracing(robot_state: &mut RobotState) {
         // Determine tracing direction based on robot ID (opposite directions)
         let tracing_direction = if robot_state.id == ROBOT_LEFT_HAND { 
@@ -126,7 +126,7 @@ impl CentralScanPhase {
             LEFT_HAND_RULE 
         };
         
-        robot_state.scout_depth_n = 3; // Reset to initial depth
+        // For central scan, we don't need scouting missions - just trace until rendezvous
         robot_state.boundary_scout = Some(BoundaryScoutState {
             tracing_direction,
             steps_taken: 0,
@@ -138,7 +138,7 @@ impl CentralScanPhase {
             total_rotation_steps: 0,
         });
         
-        println!("Robot {} reset boundary scout for virtual tracing, direction {}", 
+        println!("Robot {} reset for virtual boundary tracing (no scouting missions), direction {}", 
                  robot_state.id, tracing_direction);
     }
     
@@ -153,8 +153,8 @@ impl CentralScanPhase {
             return PhaseTransition::Continue;
         };
         
-        // Execute virtual boundary tracing (similar to boundary scouting)
-        let trace_result = Self::execute_virtual_boundary_tracing(robot_state, context, &virtual_boundaries);
+        // Execute direct virtual boundary tracing (no scouting missions)
+        let trace_result = Self::execute_direct_virtual_tracing(robot_state, context, &virtual_boundaries);
         
         match trace_result {
             VirtualTraceResult::Continue => PhaseTransition::Continue,
@@ -170,38 +170,8 @@ impl CentralScanPhase {
         }
     }
     
-    /// Execute virtual boundary tracing step
-    fn execute_virtual_boundary_tracing(robot_state: &mut RobotState, context: &PhaseContext, virtual_boundaries: &[Vec<Point>]) -> VirtualTraceResult {
-        let scout_n = robot_state.scout_depth_n;
-        let steps_taken_this_mission = robot_state.boundary_scout
-            .as_ref()
-            .map(|s| s.steps_taken_this_scouting_mission)
-            .unwrap_or(0);
-        let returning = robot_state.boundary_scout
-            .as_ref()
-            .map(|s| s.returning)
-            .unwrap_or(false);
-        
-        if returning {
-            return Self::handle_virtual_return_journey(robot_state, scout_n);
-        }
-        
-        // Forward scouting with virtual boundaries
-        if steps_taken_this_mission < scout_n {
-            Self::execute_virtual_forward_scouting(robot_state, context, virtual_boundaries)
-        } else {
-            // Start returning
-            if let Some(scout) = robot_state.boundary_scout.as_mut() {
-                scout.returning = true;
-                scout.steps_taken_this_scouting_mission = 0;
-            }
-            println!("Robot {} finished {} virtual steps, returning", robot_state.id, scout_n);
-            VirtualTraceResult::Continue
-        }
-    }
-    
-    /// Execute forward scouting with virtual boundaries
-    fn execute_virtual_forward_scouting(robot_state: &mut RobotState, context: &PhaseContext, virtual_boundaries: &[Vec<Point>]) -> VirtualTraceResult {
+    /// Execute direct virtual boundary tracing (no scouting missions)
+    fn execute_direct_virtual_tracing(robot_state: &mut RobotState, context: &PhaseContext, virtual_boundaries: &[Vec<Point>]) -> VirtualTraceResult {
         let (tracing_direction, first_move) = if let Some(scout) = robot_state.boundary_scout.as_ref() {
             (scout.tracing_direction, scout.first_move)
         } else {
@@ -209,7 +179,7 @@ impl CentralScanPhase {
         };
         
         let next_pos = if first_move {
-            // First move: similar logic to regular boundary scouting
+            // First move: find direction along virtual boundary
             let partner = context.all_robots.iter().find(|r| r.state.id == robot_state.partner_id).unwrap();
             Self::calculate_first_virtual_move(robot_state, partner, virtual_boundaries)
         } else {
@@ -228,19 +198,20 @@ impl CentralScanPhase {
             robot_state.pose.orientation_rad = WallFollower::update_orientation(prev_pos, next_pos);
             robot_state.pose.position = next_pos;
             
+            println!("Robot {} virtual trace: moved to ({}, {})", robot_state.id, next_pos.x, next_pos.y);
+            
             // Update boundary scout state
             if let Some(scout) = robot_state.boundary_scout.as_mut() {
                 scout.path.push(next_pos);
                 scout.steps_taken += 1;
-                scout.steps_taken_this_scouting_mission += 1;
                 scout.first_move = false;
             }
             
-            // Check for rendezvous during active scouting
+            // Check for rendezvous during tracing
             let partner = context.all_robots.iter().find(|r| r.state.id == robot_state.partner_id).unwrap();
             if !first_move && Self::within_comm_range(&robot_state.pose.position, &partner.state.pose.position) 
                && robot_state.pose.position != partner.state.pose.position {
-                println!("Robot {} virtual rendezvous with partner during scouting", robot_state.id);
+                println!("Robot {} virtual rendezvous with partner - loop completed", robot_state.id);
                 return VirtualTraceResult::LoopCompleted;
             }
             
@@ -302,45 +273,6 @@ impl CentralScanPhase {
         }
         
         false
-    }
-    
-    /// Handle return journey for virtual boundary tracing
-    fn handle_virtual_return_journey(robot_state: &mut RobotState, scout_n: u32) -> VirtualTraceResult {
-        if let Some(scout) = robot_state.boundary_scout.as_ref() {
-            let path_length = scout.path.len();
-            if scout.steps_taken_this_scouting_mission + 1 < path_length as u32 {
-                // Continue returning
-                let target_index = path_length - 2 - scout.steps_taken_this_scouting_mission as usize;
-                let next_pos = scout.path[target_index];
-                
-                let prev_pos = robot_state.pose.position;
-                robot_state.pose.orientation_rad = WallFollower::update_orientation(prev_pos, next_pos);
-                robot_state.pose.position = next_pos;
-                
-                if let Some(scout) = robot_state.boundary_scout.as_mut() {
-                    scout.steps_taken_this_scouting_mission += 1;
-                }
-                
-                VirtualTraceResult::Continue
-            } else {
-                // Completed return journey - double depth and start next leg
-                println!("Robot {} completed virtual return scan. Doubling scout_depth_n ({} -> {})", 
-                         robot_state.id, scout_n, scout_n * 2);
-                robot_state.scout_depth_n *= 2;
-                
-                if let Some(scout) = robot_state.boundary_scout.as_mut() {
-                    scout.steps_taken_this_scouting_mission = 0;
-                    scout.returning = false;
-                    scout.path.clear();
-                    scout.path.push(robot_state.pose.position);
-                    scout.first_move = true;
-                }
-                
-                VirtualTraceResult::Continue
-            }
-        } else {
-            VirtualTraceResult::Continue
-        }
     }
     
     /// Handle completed virtual loop
