@@ -20,6 +20,7 @@ pub struct RobotNode {
     boundary_analysis: BoundaryAnalysisPhase,
     island_escape: IslandEscapePhase,
     interior_sweep: InteriorSweepPhase,
+    central_scan: CentralScanPhase,
 }
 
 impl RobotNode {
@@ -32,6 +33,7 @@ impl RobotNode {
             boundary_analysis: BoundaryAnalysisPhase,
             island_escape: IslandEscapePhase,
             interior_sweep: InteriorSweepPhase,
+            central_scan: CentralScanPhase,
         }
     }
 
@@ -49,6 +51,7 @@ impl RobotNode {
             RobotPhase::BoundaryAnalysis => self.boundary_analysis.execute(&mut self.state, &context),
             RobotPhase::IslandEscape => self.island_escape.execute(&mut self.state, &context),
             RobotPhase::InteriorSweep => self.interior_sweep.execute(&mut self.state, &context),
+            RobotPhase::CentralScan => self.central_scan.execute(&mut self.state, &context),
             _ => PhaseTransition::Continue,
         };
 

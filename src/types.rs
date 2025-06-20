@@ -62,6 +62,14 @@ pub struct BoundaryScoutState {
     pub total_rotation_steps: i32, // Total rotation in 90-degree steps (positive = counterclockwise)
 }
 
+/// State for central scan phase
+#[derive(Clone, Debug)]
+pub struct CentralScanState {
+    pub virtual_boundary: Vec<Point>,     // Previous loop becomes new "wall"
+    pub scan_iteration: u32,              // How many layers deep we've gone
+    pub completed_loops: Vec<Vec<Point>>, // All completed boundary loops
+}
+
 /// State information for a single robot.
 #[derive(Clone, Debug)]
 pub struct RobotState {
@@ -75,6 +83,7 @@ pub struct RobotState {
     pub loop_analysis_data: Option<LoopAnalysisData>,
     pub travel_direction_before_island: Option<f64>,
     pub boundary_scout: Option<BoundaryScoutState>,
+    pub central_scan: Option<CentralScanState>,
 }
 
 /// Data collected during a boundary trace to analyze a closed loop.
@@ -82,4 +91,10 @@ pub struct RobotState {
 pub struct LoopAnalysisData {
     pub path_traced: Vec<Point>,
     pub total_angular_displacement: f64,
+    // Interior sweep fields
+    pub loop_start_position: Option<Point>,
+    pub loop_closed: Option<bool>,
+    pub total_loop_length: Option<u32>,
+    pub midpoint_direction: Option<Point>,
+    pub target_position: Option<Point>,
 } 

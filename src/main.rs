@@ -86,9 +86,15 @@ fn main() {
                 phase2_completed = true;
             }
         } else if all_in_advanced_phases {
-            println!("Robots have progressed to advanced exploration phases (IslandEscape/InteriorSweep).");
-            println!("Stopping simulation after successful boundary analysis and phase transition.");
-            break;
+            // Continue running - let the advanced phases execute
+            // Check if any robots have completed (transitioned to Idle or other completion state)
+            let any_completed = sim.robots.iter().any(|r| 
+                matches!(r.state.phase, RobotPhase::Idle)
+            );
+            if any_completed {
+                println!("Interior sweep completed successfully!");
+                break;
+            }
         }
 
         tick += 1;

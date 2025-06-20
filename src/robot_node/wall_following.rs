@@ -142,6 +142,68 @@ impl WallFollower {
         global_map.cells[idx] != CellState::Obstacle
     }
 
+    /// Check if a position is part of any virtual boundary (completed loop)
+    pub fn is_virtual_wall(pos: Point, virtual_boundaries: &[Vec<Point>]) -> bool {
+        for boundary in virtual_boundaries {
+            if boundary.contains(&pos) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a position is valid and empty, treating virtual boundaries as walls
+    pub fn is_position_valid_and_empty_virtual(pos: Point, global_map: &GridMap, virtual_boundaries: &[Vec<Point>]) -> bool {
+        // First check if it's a valid empty position
+        if !Self::is_position_valid_and_empty(pos, global_map) {
+            return false;
+        }
+        // Then check if it's not part of a virtual boundary
+        !Self::is_virtual_wall(pos, virtual_boundaries)
+    }
+
+    /// Wall-following step with virtual boundary support
+    pub fn wall_follow_step_virtual(
+        current_pos: Point,
+        orientation: f64,
+        global_map: &GridMap,
+        virtual_boundaries: &[Vec<Point>],
+        tracing_direction: i8,
+    ) -> Option<Point> {
+        let (current_dx, current_dy) = Self::get_direction_vector(orientation);
+
+        let priorities = if tracing_direction == LEFT_HAND_RULE {
+            // Left-hand rule: try left, forward, right, back
+            [
+                (-current_dy, current_dx),   // Left (90° counterclockwise)
+                (current_dx, current_dy),    // Forward
+                (current_dy, -current_dx),   // Right (90° clockwise)
+                (-current_dx, -current_dy),  // Backward
+            ]
+        } else {
+            // Right-hand rule: try right, forward, left, back
+            [
+                (current_dy, -current_dx),   // Right (90° clockwise)
+                (current_dx, current_dy),    // Forward
+                (-current_dy, current_dx),   // Left (90° counterclockwise)
+                (-current_dx, -current_dy),  // Backward
+            ]
+        };
+
+        for (dx, dy) in &priorities {
+            let next_pos = Point {
+                x: current_pos.x + dx,
+                y: current_pos.y + dy,
+            };
+
+            if Self::is_position_valid_and_empty_virtual(next_pos, global_map, virtual_boundaries) {
+                return Some(next_pos);
+            }
+        }
+
+        None
+    }
+
     /// Updates robot orientation based on previous position and new position
     pub fn update_orientation(prev_pos: Point, next_pos: Point) -> f64 {
         let dx = next_pos.x - prev_pos.x;
