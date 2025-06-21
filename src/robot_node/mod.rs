@@ -39,7 +39,8 @@ impl RobotNode {
 
     /// The main decision-making loop, called on each simulation tick.
     /// Only performs movement; sensing and communication are handled externally.
-    pub fn tick(&mut self, all_robots: &[RobotNode], global_map: &GridMap) {
+    /// Returns true if robot has completed all tasks.
+    pub fn tick(&mut self, all_robots: &[RobotNode], global_map: &GridMap) -> bool {
         let context = PhaseContext {
             all_robots,
             global_map,
@@ -52,20 +53,29 @@ impl RobotNode {
             RobotPhase::IslandEscape => self.island_escape.execute(&mut self.state, &context),
             RobotPhase::InteriorSweep => self.interior_sweep.execute(&mut self.state, &context),
             RobotPhase::CentralScan => self.central_scan.execute(&mut self.state, &context),
-            _ => PhaseTransition::Continue,
+            RobotPhase::Idle => {
+                // Robot has completed all exploration tasks
+                PhaseTransition::Complete
+            },
         };
 
         // Handle phase transitions
         match transition {
             PhaseTransition::Transition(new_phase) => {
                 println!("Robot {} transitioning from {:?} to {:?}", self.state.id, self.state.phase, new_phase);
+                if new_phase == RobotPhase::Idle {
+                    println!("*** DEBUG: Robot {} entered Idle phase", self.state.id);
+                }
                 self.state.phase = new_phase;
+                false
             },
             PhaseTransition::Complete => {
                 println!("Robot {} completed all phases", self.state.id);
+                true
             },
             PhaseTransition::Continue => {
                 // Stay in current phase
+                false
             }
         }
     }

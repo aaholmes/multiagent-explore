@@ -1,6 +1,6 @@
 use multiagent_explore::simulation_manager::SimulationManager;
 use multiagent_explore::robot_node::RobotNode;
-use multiagent_explore::types::RobotPhase;
+use multiagent_explore::types::{RobotPhase, CellState};
 use std::env;
 
 mod visualize;
@@ -63,8 +63,19 @@ fn main() {
         history.push(sim.robots.clone());
         // 4. Move
         let robots_snapshot = sim.robots.clone();
+        let mut all_robots_completed = true;
         for robot in &mut sim.robots {
-            robot.tick(&robots_snapshot, &sim.map);
+            let completed = robot.tick(&robots_snapshot, &sim.map);
+            if completed {
+                println!("*** DEBUG: Robot {} returned completion status at tick {}", robot.state.id, tick);
+            }
+            if !completed {
+                all_robots_completed = false;
+            }
+        }
+        
+        if all_robots_completed {
+            println!("*** DEBUG: All robots completed at tick {}", tick);
         }
 
         // Loop closure detection is now handled within individual robot logic
@@ -77,8 +88,31 @@ fn main() {
         let all_in_advanced_phases = sim.robots.iter().all(|r|
             matches!(r.state.phase, RobotPhase::IslandEscape | RobotPhase::InteriorSweep)
         );
+        let both_robots_idle = sim.robots.iter().all(|r|
+            r.state.phase == RobotPhase::Idle
+        );
         
-        if all_boundary_analyzed {
+        if both_robots_idle {
+            println!("*** DEBUG: Both robots are in Idle phase at tick {}", tick);
+        }
+        
+        // Check current robot phases every tick after 150
+        if tick >= 150 {
+            for robot in &sim.robots {
+                println!("*** DEBUG: Tick {}: Robot {} in phase {:?}", tick, robot.state.id, robot.state.phase);
+            }
+        }
+        
+        if both_robots_idle {
+            println!("Exploration complete - both robots in Idle phase! Final maps:");
+            sim.print_all_maps();
+            break;
+        } else if all_robots_completed {
+            // All robots have completed their exploration tasks
+            println!("All robots completed exploration! Final maps:");
+            sim.print_all_maps();
+            break;
+        } else if all_boundary_analyzed {
             if phase2_completed {
                 println!("Phase 2 (Boundary Scouting) completed and loop analyzed.");
                 break;

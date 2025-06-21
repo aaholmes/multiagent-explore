@@ -14,8 +14,12 @@ impl RobotPhaseBehavior for CentralScanPhase {
     fn execute(&mut self, robot_state: &mut RobotState, context: &PhaseContext) -> PhaseTransition {
         println!("Robot {} executing central scan", robot_state.id);
         
-        // Ensure both robots are in central scan phase
+        // Check partner phase - if partner is Idle, we should also complete
         let partner = context.all_robots.iter().find(|r| r.state.id == robot_state.partner_id).unwrap();
+        if partner.state.phase == RobotPhase::Idle {
+            println!("Robot {} completing central scan because partner is already Idle", robot_state.id);
+            return PhaseTransition::Transition(RobotPhase::Idle);
+        }
         if partner.state.phase != RobotPhase::CentralScan {
             println!("Robot {} waiting for partner to enter central scan phase", robot_state.id);
             return PhaseTransition::Continue;
@@ -164,7 +168,7 @@ impl CentralScanPhase {
             },
             VirtualTraceResult::NoProgress => {
                 // Central scan complete - no more areas to explore
-                println!("Robot {} central scan complete - no more explorable areas", robot_state.id);
+                println!("*** CENTRAL SCAN DEBUG: Robot {} central scan complete - no more explorable areas", robot_state.id);
                 PhaseTransition::Transition(RobotPhase::Idle)
             }
         }
@@ -305,7 +309,7 @@ impl CentralScanPhase {
             }
         } else {
             // No more unexplored area inside - central scan complete
-            println!("Robot {} completed central scan - no more unexplored areas", robot_state.id);
+            println!("*** CENTRAL SCAN DEBUG: Robot {} completed central scan - no more unexplored areas", robot_state.id);
             PhaseTransition::Transition(RobotPhase::Idle)
         }
     }
