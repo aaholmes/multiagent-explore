@@ -56,6 +56,7 @@ fn test_robot0_wall_follow_left_hand_simple_wall() {
             initial_scouting_direction: None,
             total_rotation_steps: 0,
         }),
+        central_scan: None,
     };
     let mut robot0 = RobotNode::new(robot0_state);
 
@@ -128,6 +129,7 @@ fn test_robot1_wall_follow_right_hand_simple_wall() {
             initial_scouting_direction: None,
             total_rotation_steps: 0,
         }),
+        central_scan: None,
     };
     let mut robot1 = RobotNode::new(robot1_state);
 
@@ -190,6 +192,7 @@ fn test_rotation_based_boundary_analysis() {
             initial_scouting_direction: None,
             total_rotation_steps: -2, // Robot 0 rotated -2 steps (clockwise)
         }),
+        central_scan: None,
     };
 
     let robot1_state = RobotState {
@@ -212,6 +215,7 @@ fn test_rotation_based_boundary_analysis() {
             initial_scouting_direction: None,
             total_rotation_steps: 2, // Robot 1 rotated +2 steps (counter-clockwise)
         }),
+        central_scan: None,
     };
 
     // Test exterior wall case: -2 - 2 = -4 (exterior wall)
