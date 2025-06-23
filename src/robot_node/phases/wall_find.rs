@@ -1,7 +1,6 @@
 /// Initial wall finding phase implementation
 
 use crate::types::*;
-use crate::constants::*;
 use crate::robot_node::phase_trait::*;
 
 /// Phase 1: Move in a straight line until a wall is seen directly in front

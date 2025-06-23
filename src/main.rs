@@ -1,6 +1,6 @@
 use multiagent_explore::simulation_manager::SimulationManager;
 use multiagent_explore::robot_node::RobotNode;
-use multiagent_explore::types::{RobotPhase, CellState};
+use multiagent_explore::types::RobotPhase;
 use std::env;
 
 mod visualize;

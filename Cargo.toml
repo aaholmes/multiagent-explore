@@ -2,14 +2,13 @@
 name = "multiagent_explore"
 version = "0.1.0"
 edition = "2021"
+authors = ["Adam A Holmes <adamaholmes@gmail.com>"]
+description = "Coordinated Multi-Robot Exploration in Rust"
+license = "MIT"
 
 [lib]
 name = "multiagent_explore"
 path = "src/lib.rs"
-
-authors = ["Adam A Holmes <adamaholmes@gmail.com>"]
-description = "Coordinated Multi-Robot Exploration in Rust"
-license = "MIT"
 
 [[bin]]
 name = "multiagent_explore"

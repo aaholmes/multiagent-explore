@@ -1,11 +1,12 @@
 # Coordinated Multi-Robot Exploration
 
-A simulation of a coordinated multi-robot exploration and mapping algorithm in Rust. This project explores a robust, phased strategy for two robots to systematically map an unknown 2D grid environment under realistic constraints.
+A high-performance Rust simulation implementing the **"Iterative Boundary Trace & Coordinated Sweep"** algorithm for autonomous multi-robot exploration and mapping of unknown 2D environments.
 
-## Overview
-Autonomous exploration of unknown environments is a fundamental problem in robotics, with applications ranging from search and rescue to planetary exploration. This project implements and simulates a novel multi-robot exploration strategy designed to be scalable, complete, and robust to common real-world constraints.
+## 🚀 Overview
 
-The core of this project is the implementation of the "Iterative Boundary Trace & Coordinated Sweep" algorithm, a deterministic strategy designed to solve the specific problem outlined below.
+This project tackles one of robotics' fundamental challenges: **coordinated exploration under communication constraints**. Two autonomous robots collaborate to systematically map unknown environments using a novel phased exploration strategy that balances efficiency with robust coordination.
+
+**Key Innovation**: Our algorithm solves the explore-vs-coordinate dilemma through iterative boundary scouting with progressive depth increase, ensuring complete coverage while maintaining communication coordination.
 
 ### The Problem: Coordinated Exploration Under Constraints
 
@@ -45,37 +46,112 @@ This phase continues until the robots meet, having successfully traced a complet
 ### Phase 3: Loop Analysis (Island vs. Outer Wall)
 Once a loop is closed, the robots analyze it to determine if they have mapped an internal "island" (an obstacle cluster) or the true outer boundary of the area. This is achieved by analyzing the geometry of the traced path and the contents of the map inside versus outside the loop. If an island is detected, the robots use their last known heading to "escape" the island and continue searching for the true outer wall.
 
-### Phase 4: Central Island Scan
-After confirming the main outer boundary, the robots perform a quick, coordinated scan across a central line of the newly defined area. This is a heuristic designed to efficiently discover any large, simple obstacles or "courtyards" in the middle of the space that could complicate the next phase.
+### Phase 4: Coordinated Interior Sweeps
+With the boundary confirmed, the robots begin the final mapping phase:
 
-### Phase 5: Coordinated Interior Sweeps
-With the boundary confirmed and major central obstacles noted, the robots begin the final mapping phase:
+- **Frontier-based exploration**: Robots collaboratively sweep the interior space by moving inwards from the known frontier
+- **Coordinated movement**: They move in coordinated "opposite directions," ensuring systematic coverage  
+- **Periodic synchronization**: Robots periodically meet to merge their maps and plan the next inward sweep on the new, smaller frontier
+- **Complete coverage**: This process repeats until the entire interior is mapped
 
-They collaboratively sweep the interior space by moving inwards from the known frontier.
-They move in coordinated "opposite directions," ensuring systematic coverage.
-They periodically meet on the other side of the sweep area to merge their maps, ensuring consistency and efficiently planning the next inward sweep on the new, smaller frontier. This process repeats until the entire interior is mapped.
+## ✨ Key Features
 
-## Key Features & Concepts
-Adaptive Exploration: Uses iterative deepening ("scouting missions") to safely probe large environments.
-Communication-Aware: The frequent rendezvous points during the scouting phase are designed to work within the constraint of limited communication range.
-Systematic Coverage: Employs deterministic phases to ensure no part of the environment is missed.
-Explicit Coordination: Relies on planned rendezvous points for map merging and re-synchronization.
-Robust Island Handling: Includes specific logic to detect and navigate around complex internal obstacles without abandoning the goal of finding the true perimeter.
+- **🔄 Adaptive Exploration**: Uses iterative deepening ("scouting missions") to safely probe large environments
+- **📡 Communication-Aware**: Frequent rendezvous points designed for limited communication range constraints  
+- **📋 Systematic Coverage**: Deterministic phases ensure complete environment mapping
+- **🤝 Explicit Coordination**: Planned rendezvous points for map merging and re-synchronization
+- **🏝️ Robust Island Handling**: Advanced logic to detect and navigate around complex internal obstacles
+- **⚡ High Performance**: Written in Rust for memory safety and optimal performance
+- **🎯 Trait-Based Architecture**: Modular phase system for extensibility and maintainability
 
-## Implementation Details
-Language: Rust. Chosen for its performance, memory safety, and strong concurrency support, making it ideal for building reliable, high-performance robotics systems.
-Ecosystem: Intended for integration with the ROS2 framework and the Gazebo simulator to provide a realistic demonstration of the algorithm's performance in a standard robotics environment.
+## 🛠️ Implementation Highlights
 
-## How to Build & Run
+- **Wall-Following Algorithms**: Left/right-hand rule implementations with collision avoidance
+- **Boundary Analysis**: Rotation-based detection to distinguish islands from exterior walls  
+- **Real-time Visualization**: Interactive eGUI interface showing robot movement and mapping progress
+- **Configurable Scenarios**: Multiple map formats with customizable starting conditions
+- **Comprehensive Testing**: Unit tests covering core algorithms and edge cases
 
-### Clone the repository
+## 🚀 Quick Start
+
+### Prerequisites
+- Rust toolchain (1.70+)
+- Git
+
+### Installation & Usage
+
+```bash
+# Clone the repository
 git clone https://github.com/aaholmes/multiagent-explore.git
 cd multiagent-explore
 
-### Build instructions (e.g., using 'cargo' or 'colcon build' for ROS2)
+# Build the project
 cargo build --release
 
-### Run simulation instructions
-./run_simulation.sh --map_file maps/complex_office.map
-License
-This project is licensed under the MIT License.
+# Run simulation with different scenarios
+./run_simulation.sh                                    # Default: sample room
+./run_simulation.sh --map_file maps/island_room.map   # Island detection demo  
+./run_simulation.sh --map_file maps/l_shaped_room.map # Complex geometry
+./run_simulation.sh --seed 123                        # Reproducible run
+
+# Run tests
+cargo test
+```
+
+### Available Maps
+- `sample_room.map` - Basic room with scattered obstacles
+- `simple_corridor.map` - Long corridor for boundary tracing
+- `island_room.map` - Room with central island obstacle  
+- `l_shaped_room.map` - Non-convex geometry testing
+
+## 🎮 Simulation Controls
+
+The simulation runs automatically and displays:
+- Real-time robot positions and orientations
+- Progressive map discovery visualization  
+- Phase transitions and coordination events
+- Final complete map with coverage statistics
+
+## 🔬 Algorithm Details
+
+### Core Architecture
+```
+src/robot_node/
+├── phases/           # Modular phase implementations
+│   ├── wall_find.rs     # Phase 1: Initial wall discovery
+│   ├── boundary_scouting.rs # Phase 2: Iterative boundary exploration  
+│   ├── boundary_analysis.rs # Phase 3: Island vs exterior detection
+│   └── interior_sweep.rs    # Phase 4: Final interior mapping
+├── wall_following.rs # Left/right-hand rule algorithms
+└── mod.rs           # Main robot coordination logic
+```
+
+## 🚀 Future Enhancements
+
+The following features represent natural extensions to the current implementation:
+
+- **Central Island Preprocessing**: Intelligent obstacle discovery before interior sweeps
+- **Dynamic Communication Ranges**: Adaptive range based on environment complexity
+- **Multi-Robot Scaling**: Extension to 3+ robot teams
+- **ROS2 Integration**: Real-world deployment capabilities
+- **Performance Optimization**: GPU-accelerated path planning
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## 📚 Citation
+
+If you use this work in your research, please cite:
+```bibtex
+@software{multiagent_explore,
+  author = {Holmes, Adam A.},
+  title = {Coordinated Multi-Robot Exploration: Iterative Boundary Trace & Coordinated Sweep},
+  url = {https://github.com/aaholmes/multiagent-explore},
+  year = {2024}
+}
+```

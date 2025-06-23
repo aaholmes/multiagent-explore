@@ -1,5 +1,4 @@
 use multiagent_explore::types::*;
-use std::io::Write;
 
 #[test]
 fn test_point_equality() {

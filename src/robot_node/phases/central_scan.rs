@@ -1,12 +1,14 @@
-/// Central scan phase implementation - iterative boundary tracing with virtual walls
+/// Central scan phase implementation - FUTURE ENHANCEMENT
+/// This phase represents iterative interior exploration using virtual boundaries.
+/// Currently transitions directly to InteriorSweep as a foundation for future development.
 
 use crate::types::*;
 use crate::constants::*;
 use crate::robot_node::phase_trait::*;
 use crate::robot_node::wall_following::WallFollower;
-use crate::robot_node::boundary_analysis::BoundaryAnalyzer;
 
-/// Phase 4: Central Scan - iterative interior exploration using virtual boundaries
+/// Phase 4: Central Scan - FUTURE ENHANCEMENT
+/// Reserved for iterative interior exploration using virtual boundaries
 #[derive(Debug, Clone)]
 pub struct CentralScanPhase;
 
@@ -227,7 +229,7 @@ impl CentralScanPhase {
     }
     
     /// Calculate first move for virtual boundary tracing
-    fn calculate_first_virtual_move(robot_state: &RobotState, partner: &crate::robot_node::RobotNode, virtual_boundaries: &[Vec<Point>]) -> Option<Point> {
+    fn calculate_first_virtual_move(robot_state: &RobotState, _partner: &crate::robot_node::RobotNode, virtual_boundaries: &[Vec<Point>]) -> Option<Point> {
         // Try to find a direction that leads along a virtual boundary
         let current_pos = robot_state.pose.position;
         let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]; // S, N, E, W
@@ -280,7 +282,7 @@ impl CentralScanPhase {
     }
     
     /// Handle completed virtual loop
-    fn handle_completed_virtual_loop(robot_state: &mut RobotState, partner: &crate::robot_node::RobotNode) -> PhaseTransition {
+    fn handle_completed_virtual_loop(robot_state: &mut RobotState, _partner: &crate::robot_node::RobotNode) -> PhaseTransition {
         // Analyze the completed virtual loop
         let contains_unexplored = Self::loop_contains_unexplored_area(robot_state);
         

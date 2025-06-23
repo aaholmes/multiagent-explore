@@ -69,7 +69,7 @@ impl App for VisualizeApp {
             let total_height = map_pixel_height;
 
             // Reserve space for the maps and get the rect
-            let (rect, _response) = ui.allocate_exact_size(
+            let (_rect, _response) = ui.allocate_exact_size(
                 egui::vec2(total_width, total_height),
                 egui::Sense::hover(),
             );

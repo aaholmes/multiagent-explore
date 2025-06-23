@@ -33,8 +33,8 @@ pub enum RobotPhase {
     BOUNDARY_SCOUTING, // The iterative part with increasing 'n'
     BOUNDARY_ANALYSIS, // After closing a loop, deciding if it's an island
     ISLAND_ESCAPE,     // Moving past a detected island
-    CENTRAL_SCAN,      // Proactive scan for central islands
     INTERIOR_SWEEP,    // Coordinated inward sweep of a confirmed area
+    // Note: CENTRAL_SCAN phase reserved for future enhancement
 }
 
 // --- Structs ---
@@ -171,15 +171,9 @@ Set phase to ISLAND_ESCAPE.
 Robots identify their original travel direction before starting the loop trace.
 They plan a path in that direction away from the island and revert to INITIAL_WALL_FIND or BOUNDARY_SCOUTING upon hitting the next wall.
 If Outer Wall:
-The boundary is considered mapped. They transition to CENTRAL_SCAN.
+The boundary is considered mapped. They transition to INTERIOR_SWEEP.
 
-Phase 4: Central Island Scan
-
-The robots identify a central line/path through the newly mapped area.
-They move together along this path to the other side, mapping any large central obstacles they find.
-Upon completion, they transition to INTERIOR_SWEEP.
-
-Phase 5: Coordinated Interior Sweeps
+Phase 4: Coordinated Interior Sweeps
 
 The robots identify the current complete frontier between the explored interior and unexplored interior.
 They divide the frontier (e.g., each takes the half closest to it).

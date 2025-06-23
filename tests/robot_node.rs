@@ -172,7 +172,7 @@ fn test_robot1_wall_follow_right_hand_simple_wall() {
 #[test]
 fn test_rotation_based_boundary_analysis() {
     // Create two robots with boundary scout data
-    let robot0_state = RobotState {
+    let _robot0_state = RobotState {
         id: ROBOT_LEFT_HAND,
         pose: Pose { position: Point { x: 5, y: 5 }, orientation_rad: 0.0 },
         phase: RobotPhase::BoundaryAnalysis,
@@ -195,7 +195,7 @@ fn test_rotation_based_boundary_analysis() {
         central_scan: None,
     };
 
-    let robot1_state = RobotState {
+    let _robot1_state = RobotState {
         id: ROBOT_RIGHT_HAND,
         pose: Pose { position: Point { x: 6, y: 5 }, orientation_rad: 0.0 },
         phase: RobotPhase::BoundaryAnalysis,
