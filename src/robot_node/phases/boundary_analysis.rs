@@ -26,9 +26,9 @@ impl RobotPhaseBehavior for BoundaryAnalysisPhase {
                     PhaseTransition::Transition(RobotPhase::IslandEscape)
                 },
                 BoundaryAnalysisResult::ExteriorWall => {
-                    println!("Robot {} detected EXTERIOR WALL via rotation analysis. Transitioning to CentralScan for interior exploration.", 
+                    println!("Robot {} detected EXTERIOR WALL via rotation analysis. Transitioning to InteriorSweep for coordinated exploration.", 
                              robot_state.id);
-                    PhaseTransition::Transition(RobotPhase::CentralScan)
+                    PhaseTransition::Transition(RobotPhase::InteriorSweep)
                 },
                 BoundaryAnalysisResult::Incomplete => {
                     println!("Robot {} rotation analysis incomplete. Continuing analysis.", robot_state.id);
