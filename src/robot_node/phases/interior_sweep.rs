@@ -75,39 +75,44 @@ impl InteriorSweepPhase {
             return PhaseTransition::Transition(RobotPhase::Idle);
         }
         
-        // Determine sweep direction based on robot ID
-        let sweep_direction = if robot_state.id == ROBOT_LEFT_HAND {
-            LEFT_HAND_RULE  // Robot 0 sweeps left
-        } else {
-            RIGHT_HAND_RULE // Robot 1 sweeps right
-        };
-        
-        // Find the closest frontier cell
+        // Check if we're in a sweep iteration or need to start a new one
         let current_pos = robot_state.pose.position;
-        let target_frontier = frontier_cells.iter()
-            .min_by_key(|&&p| Self::manhattan_distance(current_pos, p))
-            .copied();
         
-        if let Some(target) = target_frontier {
-            // Move towards the frontier using wall-following behavior
-            if let Some(next_pos) = Self::move_towards_frontier(robot_state, target, global_map, sweep_direction) {
-                robot_state.pose.position = next_pos;
-                robot_state.pose.orientation_rad = WallFollower::update_orientation(current_pos, next_pos);
-                
-                println!("Robot {} swept to ({}, {}) towards frontier", robot_state.id, next_pos.x, next_pos.y);
-                
-                // Check if robots should rendezvous
-                if Self::should_rendezvous(robot_state, partner) {
-                    println!("Robot {} completed sweep leg - ready for next iteration", robot_state.id);
-                }
-                
-                PhaseTransition::Continue
+        // Initialize sweep state if needed
+        if robot_state.loop_analysis_data.as_ref().unwrap().target_position.is_none() {
+            Self::initialize_sweep_iteration(robot_state, partner, &frontier_cells);
+        }
+        
+        // Get target position for this sweep iteration
+        let target_pos = robot_state.loop_analysis_data.as_ref().unwrap().target_position.unwrap();
+        
+        // Check if we've reached our target position
+        if current_pos == target_pos {
+            println!("Robot {} reached target position ({}, {})", robot_state.id, target_pos.x, target_pos.y);
+            
+            // Check if partner has also reached their target
+            if Self::both_robots_reached_targets(robot_state, partner) {
+                println!("Robot {} - both robots completed sweep iteration, moving inward", robot_state.id);
+                Self::start_next_sweep_iteration(robot_state, partner, &frontier_cells);
+                return PhaseTransition::Continue;
             } else {
-                println!("Robot {} cannot reach frontier - exploration complete", robot_state.id);
-                PhaseTransition::Transition(RobotPhase::Idle)
+                // Wait for partner to reach their target
+                println!("Robot {} waiting for partner to complete sweep leg", robot_state.id);
+                return PhaseTransition::Continue;
             }
+        }
+        
+        // Move toward target position using frontier-following
+        if let Some(next_pos) = Self::move_toward_target_along_frontier(robot_state, target_pos, global_map) {
+            robot_state.pose.position = next_pos;
+            robot_state.pose.orientation_rad = WallFollower::update_orientation(current_pos, next_pos);
+            
+            println!("Robot {} swept to ({}, {}) toward target ({}, {})", 
+                     robot_state.id, next_pos.x, next_pos.y, target_pos.x, target_pos.y);
+            
+            PhaseTransition::Continue
         } else {
-            println!("Robot {} found no reachable frontier - exploration complete", robot_state.id);
+            println!("Robot {} cannot reach target - exploration complete", robot_state.id);
             PhaseTransition::Transition(RobotPhase::Idle)
         }
     }
@@ -141,19 +146,105 @@ impl InteriorSweepPhase {
         frontier
     }
     
-    /// Move towards a frontier cell using coordinated movement
-    fn move_towards_frontier(robot_state: &RobotState, target: Point, global_map: &GridMap, _sweep_direction: i8) -> Option<Point> {
+    /// Initialize a new sweep iteration by assigning target positions
+    fn initialize_sweep_iteration(robot_state: &mut RobotState, _partner: &crate::robot_node::RobotNode, frontier_cells: &[Point]) {
+        println!("Robot {} initializing new sweep iteration", robot_state.id);
+        
+        // Find the frontier boundary as a connected path
+        let frontier_path = Self::trace_frontier_boundary(frontier_cells);
+        
+        if frontier_path.len() < 2 {
+            // Not enough frontier for coordinated sweep
+            if let Some(&first_frontier) = frontier_cells.first() {
+                robot_state.loop_analysis_data.as_mut().unwrap().target_position = Some(first_frontier);
+            }
+            return;
+        }
+        
+        // Assign opposite ends of the frontier, but pick reasonable targets
+        let current_pos = robot_state.pose.position;
+        
+        // Find the best target for this robot based on its role and current position
+        let target = if robot_state.id == ROBOT_LEFT_HAND {
+            // Robot 0 goes to the leftmost frontier point that's not too far
+            frontier_path.iter()
+                .take(frontier_path.len() / 2 + 1) // Consider first half + middle
+                .min_by_key(|&&p| Self::manhattan_distance(current_pos, p))
+                .copied()
+                .unwrap_or(frontier_path[0])
+        } else {
+            // Robot 1 goes to the rightmost frontier point that's not too far  
+            frontier_path.iter()
+                .skip(frontier_path.len() / 2) // Consider second half
+                .min_by_key(|&&p| Self::manhattan_distance(current_pos, p))
+                .copied()
+                .unwrap_or(frontier_path[frontier_path.len() - 1])
+        };
+        
+        robot_state.loop_analysis_data.as_mut().unwrap().target_position = Some(target);
+        
+        println!("Robot {} assigned target position ({}, {})", robot_state.id, target.x, target.y);
+    }
+    
+    /// Trace the frontier boundary to create a connected path
+    fn trace_frontier_boundary(frontier_cells: &[Point]) -> Vec<Point> {
+        if frontier_cells.is_empty() {
+            return Vec::new();
+        }
+        
+        if frontier_cells.len() == 1 {
+            return frontier_cells.to_vec();
+        }
+        
+        // Find the leftmost and rightmost frontier cells for better separation
+        let mut sorted_frontier = frontier_cells.to_vec();
+        
+        // Sort first by X coordinate (left to right), then by Y 
+        sorted_frontier.sort_by_key(|p| (p.x, p.y));
+        
+        // Return the sorted path from leftmost to rightmost
+        sorted_frontier
+    }
+    
+    /// Check if both robots have reached their target positions
+    fn both_robots_reached_targets(robot_state: &RobotState, partner: &crate::robot_node::RobotNode) -> bool {
+        let robot_reached = robot_state.loop_analysis_data.as_ref()
+            .and_then(|data| data.target_position)
+            .map(|target| robot_state.pose.position == target)
+            .unwrap_or(false);
+            
+        let partner_reached = partner.state.loop_analysis_data.as_ref()
+            .and_then(|data| data.target_position)
+            .map(|target| partner.state.pose.position == target)
+            .unwrap_or(false);
+            
+        robot_reached && partner_reached
+    }
+    
+    /// Start the next sweep iteration by moving inward
+    fn start_next_sweep_iteration(robot_state: &mut RobotState, _partner: &crate::robot_node::RobotNode, _frontier_cells: &[Point]) {
+        println!("Robot {} starting next sweep iteration (moving inward)", robot_state.id);
+        
+        // Clear current target to trigger re-initialization
+        robot_state.loop_analysis_data.as_mut().unwrap().target_position = None;
+        
+        // Find new frontier after exploration progress
+        // This will be handled in the next call to execute_sweep_movement
+    }
+    
+    /// Move toward target position along the frontier
+    fn move_toward_target_along_frontier(robot_state: &RobotState, target: Point, global_map: &GridMap) -> Option<Point> {
         let current_pos = robot_state.pose.position;
         let directions = [NORTH, SOUTH, EAST, WEST];
         
-        // Find the best direction towards target
+        // Find the best direction towards target that follows frontier
         let mut best_move = None;
         let mut best_distance = i32::MAX;
         
         for (dx, dy) in &directions {
             let next_pos = Point { x: current_pos.x + dx, y: current_pos.y + dy };
             
-            // Check if move is valid
+            // Check if move is valid and gets us closer to target
             if Self::is_valid_move(next_pos, global_map) {
                 let distance = Self::manhattan_distance(next_pos, target);
                 if distance < best_distance {
@@ -180,12 +271,6 @@ impl InteriorSweepPhase {
     /// Calculate Manhattan distance between two points
     fn manhattan_distance(a: Point, b: Point) -> i32 {
         (a.x - b.x).abs() + (a.y - b.y).abs()
-    }
-    
-    /// Check if robots should rendezvous (close to each other)
-    fn should_rendezvous(robot_state: &RobotState, partner: &crate::robot_node::RobotNode) -> bool {
-        let distance = Self::manhattan_distance(robot_state.pose.position, partner.state.pose.position);
-        distance <= COMMUNICATION_RANGE
     }
     
     /// Check if exploration is complete (no more unexplored areas)
