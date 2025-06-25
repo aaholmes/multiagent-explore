@@ -104,13 +104,77 @@ cargo test
 - `island_room.map` - Room with central island obstacle  
 - `l_shaped_room.map` - Non-convex geometry testing
 
-## 🎮 Simulation Controls
+## 🎮 Simulation Demo
 
-The simulation runs automatically and displays:
-- Real-time robot positions and orientations
-- Progressive map discovery visualization  
-- Phase transitions and coordination events
-- Final complete map with coverage statistics
+### Live Exploration Visualization
+
+The simulation automatically launches an **interactive eGUI visualization** showing:
+- **Robot positions** (`R`) moving dynamically through the environment
+- **Progressive map discovery** as unexplored areas (` `) become explored (`.`)
+- **Phase transitions** clearly labeled in console output
+- **Coordination events** when robots communicate and synchronize
+
+> 💡 **Tip**: The visualization window shows the complete exploration history with step-by-step robot movement and map discovery. Use the interactive controls to replay and analyze the algorithm behavior in detail.
+
+### Demo Scenarios
+
+**🚀 Quick Demo** - Run all scenarios:
+```bash
+./demo.sh
+```
+
+**Individual Scenarios:**
+
+**Basic Room Exploration** (`maps/sample_room.map`)
+```bash
+./run_simulation.sh --seed 42
+```
+Demonstrates the complete 4-phase algorithm with obstacle avoidance and coordinated sweeping.
+
+**Corridor Boundary Tracing** (`maps/simple_corridor.map`)  
+```bash
+./run_simulation.sh --map_file maps/simple_corridor.map --seed 42
+```
+Shows efficient boundary discovery and rapid completion in simple environments.
+
+**Island Detection** (`maps/island_room.map`)
+```bash
+./run_simulation.sh --map_file maps/island_room.map --seed 42  
+```
+Highlights the algorithm's ability to distinguish interior obstacles from exterior boundaries.
+
+### Key Visualization Features
+- **Real-time robot positions** and orientations
+- **Progressive map discovery** visualization  
+- **Phase transitions** and coordination events
+- **Final complete maps** with coverage statistics
+- **Interactive eGUI interface** for detailed exploration analysis
+
+### 🎬 Algorithm in Action
+
+**Complex Room Exploration Demo** - Watch the complete 4-phase algorithm in action:
+
+![Complex Room Exploration](python_viz/complex_room_exploration.gif)
+
+*The animation shows both robots' individual maps side-by-side with a "fog of war" effect as they execute the full "Iterative Boundary Trace & Coordinated Sweep" algorithm. Each robot progressively discovers the environment (black=unexplored, light gray=explored empty space, dark gray=obstacles, colored squares=robot positions). Notice how their explored areas gradually expand and become identical as they share information during rendezvous points.*
+
+### Example Results
+
+**Corridor Exploration** (34 ticks, complete coverage):
+```
+Initial State:          Final State:
+    ##                   ##########
+   .R..         →       #..........#
+    ..                  #..........#
+                        #.....R....#
+                         ##########
+```
+
+**Algorithm Performance**:
+- ✅ **Complete Coverage**: All accessible areas systematically mapped
+- ✅ **Efficient Coordination**: Robots maintain communication throughout exploration  
+- ✅ **Phase Progression**: InitialWallFind → BoundaryScouting → BoundaryAnalysis → InteriorSweep → Complete
+- ✅ **Deterministic Behavior**: Reproducible results with same seed values
 
 ## 🔬 Algorithm Details
 
